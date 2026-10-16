@@ -10,3 +10,13 @@ Rules:
 - Horizontal style: no comments unless asked.
 - Enable Realtime only for `entries`, `income`, and `account_balances`.
 - Migrations live in `supabase/migrations`.
+
+Process:
+- Plan first. Wait for explicit approval before editing files or performing any database operation.
+- Make small, focused changes. Avoid unrelated refactors and drive-by edits.
+- Inspect existing code before changing it. Follow the conventions already in the file.
+- Run the appropriate checks (`npm run lint`, `npm run build`) and report exactly what was tested and what was not. Never claim coverage for checks that were not run.
+- Preserve existing Supabase data, RLS policies, authentication, and household access unless I explicitly approve a change. No schema, policy, or auth change without approval.
+- Never expose secrets. Never use the service-role key in client-side code, and keep `.env.local` untracked.
+- Intended direction is a clean application rebuild, but no rebuild and no database reset is authorized yet. Do not start a rebuild without approval.
+- Keep `SESSION.md` current at the end of substantial work sessions.
