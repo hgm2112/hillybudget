@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHousehold } from "@/lib/household";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
@@ -29,12 +30,7 @@ export function AppNav() {
       setHasHousehold(false);
       return;
     }
-    const { data: membership } = await supabase
-      .from("household_members")
-      .select("household_id")
-      .eq("user_id", userData.user.id)
-      .limit(1)
-      .maybeSingle();
+    const membership = await resolveHousehold(supabase, userData.user.id);
     setHasHousehold(Boolean(membership));
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHousehold } from "@/lib/household";
 import { money } from "@/lib/money";
 import { monthLabel, shiftMonth, toMonthKey } from "@/lib/month";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,7 @@ export default function AccountsPage() {
         router.replace("/login");
         return;
       }
-      const { data: membership } = await supabase.from("household_members").select("household_id").eq("user_id", userData.user.id).limit(1).maybeSingle();
+      const membership = await resolveHousehold(supabase, userData.user.id);
       if (!membership) {
         router.replace("/household");
         return;

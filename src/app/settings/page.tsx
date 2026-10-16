@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHousehold } from "@/lib/household";
 import { money } from "@/lib/money";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,12 +99,7 @@ export default function SettingsPage() {
         router.replace("/login");
         return;
       }
-      const { data: membership } = await supabase
-        .from("household_members")
-        .select("household_id, role")
-        .eq("user_id", userData.user.id)
-        .limit(1)
-        .maybeSingle();
+      const membership = await resolveHousehold(supabase, userData.user.id);
       if (!active) return;
       if (!membership) {
         setStatus("no-household");

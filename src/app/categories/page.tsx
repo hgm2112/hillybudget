@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHousehold } from "@/lib/household";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,7 +45,7 @@ export default function CategoriesPage() {
         router.replace("/login");
         return;
       }
-      const { data: membership } = await supabase.from("household_members").select("household_id").eq("user_id", userData.user.id).limit(1).maybeSingle();
+      const membership = await resolveHousehold(supabase, userData.user.id);
       if (!membership) {
         router.replace("/household");
         return;

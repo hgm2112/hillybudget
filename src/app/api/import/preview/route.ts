@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveHousehold } from "@/lib/household";
 import { normalizeImportFile } from "@/lib/import/normalize";
 
 type ExistingEntry = {
@@ -16,12 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { data: membership } = await supabase
-    .from("household_members")
-    .select("household_id, role")
-    .eq("user_id", userData.user.id)
-    .limit(1)
-    .maybeSingle();
+  const membership = await resolveHousehold(supabase, userData.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "No household found for this account" }, { status: 400 });

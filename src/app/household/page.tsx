@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHousehold } from "@/lib/household";
 import { DEFAULT_CATEGORIES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,12 +30,7 @@ export default function HouseholdPage() {
         { user_id: data.user.id, display_name: data.user.email?.split("@")[0] ?? null, theme: "system" },
         { onConflict: "user_id", ignoreDuplicates: true }
       );
-      const { data: membership } = await supabase
-        .from("household_members")
-        .select("household_id")
-        .eq("user_id", data.user.id)
-        .limit(1)
-        .maybeSingle();
+      const membership = await resolveHousehold(supabase, data.user.id);
       if (membership) router.replace("/");
       setChecking(false);
     });
