@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col"><ThemeProvider><AppNav /><RegisterServiceWorker />{children}</ThemeProvider></body>
+      <body className="min-h-full flex flex-col"><script dangerouslySetInnerHTML={{ __html: "(function(){try{var t=localStorage.getItem('theme');if(!t||t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'};if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}" }} /><ThemeProvider><AppNav /><RegisterServiceWorker />{children}</ThemeProvider></body>
     </html>
   );
 }

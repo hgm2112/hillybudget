@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 
 const LINKS = [
@@ -13,23 +14,41 @@ const LINKS = [
   { href: "/recurring", label: "Recurring" },
   { href: "/categories", label: "Categories" },
   { href: "/stats", label: "Stats" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppNav() {
   const supabase = createClient();
-  const [signedIn, setSignedIn] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const [hasHousehold, setHasHousehold] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
 
+  async function checkMembership() {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      setHasHousehold(false);
+      return;
+    }
+    const { data: membership } = await supabase
+      .from("household_members")
+      .select("household_id")
+      .eq("user_id", userData.user.id)
+      .limit(1)
+      .maybeSingle();
+    setHasHousehold(Boolean(membership));
+  }
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSignedIn(Boolean(session?.user));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkMembership();
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      checkMembership();
     });
     return () => subscription.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
-  if (!signedIn) return null;
+  if (!hasHousehold) return null;
 
   return (
     <nav className="border-b bg-background/95">
@@ -42,8 +61,13 @@ export function AppNav() {
           ))}
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? "Light" : "Dark"}
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          >
+            {resolvedTheme === "light" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
           <Button
             size="sm"

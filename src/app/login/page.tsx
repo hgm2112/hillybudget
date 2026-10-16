@@ -33,10 +33,24 @@ export default function LoginPage() {
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          await supabase.from("profiles").upsert(
+            { user_id: userData.user.id, display_name: email.split("@")[0] ?? null, theme: "system" },
+            { onConflict: "user_id", ignoreDuplicates: true }
+          );
+        }
         router.replace("/");
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          await supabase.from("profiles").upsert(
+            { user_id: userData.user.id, display_name: email.split("@")[0] ?? null, theme: "system" },
+            { onConflict: "user_id", ignoreDuplicates: true }
+          );
+        }
         setMessage("Account created. Check email to confirm, then sign in.");
       }
     } catch (err) {

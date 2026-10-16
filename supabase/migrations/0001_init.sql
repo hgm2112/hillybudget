@@ -80,9 +80,13 @@ create table if not exists public.recurring_items (
   updated_at timestamptz not null default now()
 );
 
-alter table public.entries
-  add constraint entries_recurring_item_fk
-  foreign key (recurring_item_id) references public.recurring_items(id) on delete set null;
+do $$
+begin
+  alter table public.entries drop constraint if exists entries_recurring_item_fk;
+  alter table public.entries
+    add constraint entries_recurring_item_fk
+    foreign key (recurring_item_id) references public.recurring_items(id) on delete set null;
+end $$;
 
 create table if not exists public.income (
   id uuid primary key default gen_random_uuid(),
@@ -143,7 +147,7 @@ create index if not exists idx_account_balances_household_month on public.accoun
 create index if not exists idx_account_balances_account_month on public.account_balances(account_id, month);
 
 -- membership helper
-drop function if exists public.is_household_member(uuid);
+drop function if exists public.is_household_member(uuid) cascade;
 create or replace function public.is_household_member(household_uuid uuid)
 returns boolean
 language sql
@@ -165,7 +169,7 @@ create or replace function public.create_household(household_name text)
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   hid uuid;
@@ -175,7 +179,7 @@ begin
     raise exception 'Not authenticated';
   end if;
   loop
-    code := upper(substr(encode(gen_random_bytes(6), 'hex'), 1, 8));
+    code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
     exit when not exists (select 1 from public.households where invite_code = code);
   end loop;
   insert into public.households (name, invite_code, owner_id)
@@ -398,3 +402,17 @@ begin
     execute format('create trigger trg_%I_updated before update on public.%I for each row execute function public.touch_updated_at()', t, t);
   end loop;
 end $$;
+
+-- table privileges (RLS still restricts rows)
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;
+grant execute on all functions in schema public to authenticated;
+
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated, service_role;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to authenticated;
