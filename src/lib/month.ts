@@ -18,3 +18,21 @@ export function monthLabel(monthKey: string) {
     timeZone: "UTC",
   });
 }
+
+export function monthName(monthKey: string) {
+  return new Date(monthKey + "T00:00:00Z").toLocaleDateString("en-US", {
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
+export function monthRange(fromMonth: string, toMonth: string) {
+  const from = toMonthKey(fromMonth);
+  const to = toMonthKey(toMonth);
+  if (from > to) return [to];
+  const months: string[] = [];
+  for (let current = from; current <= to; current = shiftMonth(current, 1)) {
+    months.push(current);
+  }
+  return months;
+}
