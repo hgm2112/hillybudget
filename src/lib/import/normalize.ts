@@ -95,7 +95,7 @@ function excelSerialToMonthKey(serial: string) {
   return `${year}-${month}-01`;
 }
 
-function classifyAccount(name: string): ProposedAccount["type"] {
+function classifyAccount(name: string): ProposedAccount["kind"] {
   const lowered = name.toLowerCase();
   if (lowered.includes("mortgage") || lowered.includes("we owe") || lowered.includes("loan")) return "loan";
   if (/(401|ira|hsa|principal|schwab)/.test(lowered)) return "retirement";
@@ -156,7 +156,7 @@ export function normalizeImportFile(sourceFileName: string, buffer: Buffer): Imp
 
     categories.set(categoryName, {
       name: categoryName,
-      type: categoryName.toLowerCase().endsWith("earnings") ? "income" : "expense",
+      kind: categoryName.toLowerCase().endsWith("earnings") ? "income" : "expense",
       color: EXPENSE_PALETTE[categoryName] ?? "#6b7280",
     });
 
@@ -202,7 +202,7 @@ export function normalizeImportFile(sourceFileName: string, buffer: Buffer): Imp
 
       const account: ProposedAccount = {
         name: accountName,
-        type: classifyAccount(accountName),
+        kind: classifyAccount(accountName),
         color: "#6b7280",
         balances: [],
       };

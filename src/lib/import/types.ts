@@ -8,7 +8,7 @@ export type ImportIssue = {
 
 export type ProposedCategory = {
   name: string;
-  type: "expense" | "income";
+  kind: "expense" | "income";
   color: string;
 };
 
@@ -24,7 +24,7 @@ export type ProposedBalance = {
 
 export type ProposedAccount = {
   name: string;
-  type: "liquid" | "retirement" | "loan";
+  kind: "liquid" | "retirement" | "loan";
   color: string;
   balances: ProposedBalance[];
 };

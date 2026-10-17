@@ -59,23 +59,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const categoryTypes = parseOverrides<ProposedCategory["type"]>(
-    formData.get("categoryTypes"),
+  const categoryKinds = parseOverrides<ProposedCategory["kind"]>(
+    formData.get("categoryKinds"),
     ["expense", "income"]
   );
-  const accountTypes = parseOverrides<ProposedAccount["type"]>(
-    formData.get("accountTypes"),
+  const accountKinds = parseOverrides<ProposedAccount["kind"]>(
+    formData.get("accountKinds"),
     ["liquid", "retirement", "loan"]
   );
   const balancesMode = formData.get("balancesMode") === "replace" ? "replace" : "skip";
 
   const categories = preview.categories.map((category) => ({
     ...category,
-    type: categoryTypes[category.name] ?? category.type,
+    kind: categoryKinds[category.name] ?? category.kind,
   }));
   const accounts = preview.accounts.map((account) => ({
     ...account,
-    type: accountTypes[account.name] ?? account.type,
+    kind: accountKinds[account.name] ?? account.kind,
   }));
 
   const idempotencyKey = createHash("sha256").update(buffer).digest("hex").slice(0, 40);

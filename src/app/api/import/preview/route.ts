@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       supabase.from("categories").select("id, name").eq("household_id", householdId),
       supabase.from("cards").select("id, name").eq("household_id", householdId),
       supabase.from("accounts").select("id, name").eq("household_id", householdId),
-      supabase.from("entries").select("month, category_id, card_id, amount").eq("household_id", householdId).eq("is_imported", true),
+      supabase.from("ledger_entries").select("month, category_id, card_id, amount").eq("household_id", householdId).not("import_batch_id", "is", null),
       supabase.from("account_balances").select("account_id, month").eq("household_id", householdId),
     ]);
 
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       cards: preview.cards.map((card) => ({ ...card, exists: cardByName.has(card.name) })),
       accounts: preview.accounts.map((account) => ({
         name: account.name,
-        type: account.type,
+        kind: account.kind,
         color: account.color,
         balanceCount: account.balances.length,
         exists: accountByName.has(account.name),
