@@ -43,4 +43,7 @@ next-env.d.ts
 __pycache__/
 
 # local budget workbook (contains personal financial data)
-Expenses.xlsx
+Expenses*.xlsx
+
+# supabase cli local state (may contain connection details)
+supabase/.temp/

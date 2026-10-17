@@ -5,68 +5,129 @@ Working state for hillybudget. Keep current at the end of each substantial work 
 ## Project state and stack
 
 - Next.js 16 App Router (TypeScript), Tailwind v4, shadcn/ui, Supabase (Auth / Postgres / Realtime / RLS), hosted on Vercel.
-- Git: `github.com:hgm2112/hillybudget`, branch `main`.
-- Commits: `c7ace7d` initial implementation; `132d5f6` Excel expense import + auth/theme fixes; `036012c` deterministic household resolution.
-- Working tree is clean and in sync with `origin/main`.
-- Excel import feature is landed and migrated: `src/lib/import/{xlsx,normalize,types}.ts`, `POST /api/import/preview` (read-only), `POST /api/import/confirm` (owner-only, transactional), UI on `/settings`.
-- Scripts: `npm run dev`, `npm run build`, `npm run lint`, `npm run import:expenses` (standalone Python pre-import script).
+- Git: `github.com:hgm2112/hillybudget`, branch `main`. Migrations live in `supabase/migrations`.
+- Supabase project (correct): `geajkzgdqflrpefhltwm.supabase.co`. Do not run destructive SQL against other projects.
+- Commands: `npm run dev`, `npm run build`, `npm run lint`.
 
-## Most recent change to `supabase/migrations/0001_init.sql`
+## Rebuild (approved, in progress)
 
-Made in `132d5f6` (already pushed):
+A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has since been imported (see below).
 
-- `entries_recurring_item_fk` is now created inside a guarded `do $$ ... end $$` block that drops the constraint if it exists first, so re-runs no longer fail.
-- `drop function if exists public.is_household_member(uuid) cascade;` — added `cascade` so signature changes can be re-applied.
-- `create_household` now `set search_path = public, extensions` (was `public`), so `gen_random_uuid()` resolves.
-- Invite code generation switched from `gen_random_bytes(6)` to `gen_random_uuid()` text, avoiding the `pgcrypto` dependency.
-- Appended explicit `grant usage on schema public`, table/sequence/function grants for `authenticated` and `service_role`, plus matching `alter default privileges` so future public objects inherit them.
+### Schema (applied via `supabase/reset_and_init.sql`)
 
-A second migration, `supabase/migrations/0002_expense_import.sql` (also in `132d5f6`), adds the `import_batches` table (RLS enabled, `import_batches_select` policy) and the `import_expenses_batch` RPC.
+- Tables: `profiles`, `households`, `household_members`, `household_settings`, `categories`, `cards`, `accounts`, `import_batches`, `recurring_items`, `ledger_entries`, `account_balances`; view `monthly_category_totals`.
+- Enums: `member_role`, `category_kind`, `account_kind`, `import_status`, `theme_pref`.
+- Unified income + expense into `ledger_entries` (no separate `income` table); `categories.kind` and `accounts.kind` replace the old `type` columns.
+- RPCs: `create_household(name)`, `join_household(invite)`, `ideal_category_amount(...)`, `import_expenses_batch(...)`.
+- RLS on all tables via `is_household_member` / `is_household_owner`; `anon` has no table privileges.
 
-## Live database validation — reported vs. independently verified
+### Progress
 
-**Reported (earlier sessions; NOT re-checked in the read-only stop session):**
+- Phases 0–8 complete. Rebuilt: `lib/session.ts`, `lib/supabase/{client,server,middleware}.ts`, `proxy.ts`, root layout, login, household, categories, recurring, dashboard/ledger, accounts, stats, settings/import.
+- Phase 9 (cleanup) done: `/api/keepalive` enforces `CRON_SECRET` when set; removed unused `src/lib/constants.ts` and `scripts/import-expenses.py` (and the `import:expenses` npm script).
 
-- The `0001_init.sql` live validation results above: FK guard, `cascade` drop, `search_path = public, extensions`, and the grants / `alter default privileges` block were reported as applied and verified against the live database.
+### Layout redesign (implemented)
 
-**Verified earlier in this session by direct read-only queries through the Supabase management API (running as `postgres`, not via the app):**
+- `supabase/migrations/0003_category_groups.sql` **is applied** to the project (`category_groups` + `categories.group_id`/`excluded` exist). Migration history was baselined via `supabase migration repair --status applied 0001 0002 0003`; future migrations apply with `npx supabase db push --db-url "$SUPABASE_DB_URL"`.
+- App shell replaced the top nav: `src/components/{app-shell,app-sidebar,sidebar,page-header}.tsx`; `app-nav.tsx` / `nav-actions.tsx` deleted. Left sidebar (brand, search, nav, account lists, theme toggle, sign-out) with a mobile drawer; hidden on `/login` and `/household`.
+- Categories page redesigned (`src/app/categories/{page.tsx,categories-client.tsx}`) into the two-pane budget view (donut, grouped categories, budget vs spent bars, monthly chart, key metrics) with inline add/edit/manage dialogs. Budget column = the ideal (trailing-average) amount; `ideal_override` edits the budget. Category icons via `src/lib/category-icons.ts`.
+- New categories actions: `addGroup`/`updateGroup`/`moveGroup`/`deleteGroup`/`setCategoryGroup`/`setExcluded`; `updateCategory` now also accepts `excluded`, `group_id`, `ideal_override`.
 
-- Import outcome: 620 entries, 188 account balances, 51 categories, 10 cards, 16 accounts, 1 import batch with `status = 'completed'`.
-- Idempotency: re-submitting the same file returned `duplicate_request = true` and left counts unchanged (620 / 188 / 1).
-- RPC behaviour tested inside rolled-back blocks: 2 inserted + 1 skipped duplicate, one category/card/account each, 2 balances; a second call with the same key returned `duplicate_request: true`; a non-owner was rejected.
-- `0002` migration state: `import_expenses_batch` present with `prosecdef = true` and `proconfig = ['search_path=public, extensions']`; `import_batches` has RLS enabled with the `import_batches_select` policy; grants present.
-- Data quality: 0 errors, 2 warnings (`American Express CC` and `Power` have no monthly values). Workbook columns map to months 2024-10 through 2026-12; summary rows are skipped.
-- Before import the household held 19 default categories and 0 records; three stray duplicate households were deleted, leaving exactly one household with one membership.
+### Dashboard split (implemented)
 
-**Verified read-only during the stop session:**
+- The old root ledger moved to **`/expenses`** (`src/app/expenses/{page,expenses-client,actions}.tsx`; component `ExpensesClient`; `revalidatePath("/expenses")`; month nav `?month=`). Root `/` now redirects to `/dashboard`.
+- New **`/dashboard`** (`src/app/dashboard/{page,dashboard-client}.tsx`): eyebrow-free `PageHeader` with a 3M/6M/12M/YTD selector, four range-based summary cards (income, expenses, net cash flow, net worth), and a 2×2 Recharts grid (spending trend area, income-vs-expenses bars, spending-by-category horizontal bars, net worth line). Data: `categories`, `monthly_category_totals`, `accounts`, `account_balances`. Net worth = latest snapshot per account (assets = liquid+retirement, liabilities = loan); the net-worth line plots **recorded months only** (no forward-fill). No Realtime. No migration needed.
+- Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Recurring, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
 
-- Git state, `.gitignore` coverage for `.env.local` and `Expenses.xlsx`, absence of secrets in tracked files, and the `0001_init.sql` diff between commits.
+### Excel import (done)
 
-**Not verified:** application behaviour was not re-tested end to end during the stop session. See known issues.
+- `Expenses.xlsx` has been imported into the live project (via the settings import preview/confirm flow). The earlier "no re-import" note no longer applies.
 
-## Login and household
+### Skip-month for account balances (implemented, migration applied)
 
-The existing login and the single remaining household are working, and the imported records are present. Realtime is enabled only for `entries`, `income`, and `account_balances`.
+- `supabase/migrations/0004_skipped_months.sql` **is applied** (verified with `supabase migration list`: `0004` local = remote). Adds `skipped_months(id, household_id, month, created_at)`, `unique(household_id, month)`, index, RLS via `is_household_member`, grants to `authenticated, service_role`.
+- Scope is **account balances only** — `ledger_entries` and `monthly_category_totals` (expenses/dashboard/stats) are untouched, so a month may be skipped for balances while still holding expense data.
+- `accounts/page.tsx` fetches `skipped_months.month` and passes `skipped: string[]`. Actions: `skipMonth` (rejects if `account_balances` exist for that month), `unskipMonth`, and `saveBalances` auto-clears a skip row after a successful upsert.
+- `accounts-client.tsx`: header gains **Skip this month** (when not skipped); **Save balances** is disabled while skipped. For a skipped month, the summary/loan/add-account sections are dimmed (`inert` + `opacity-40`) while the **Balances** card stays full-opacity: its account rows render **blank** (empty inputs, no placeholders, blank change) and a **"No data this month"** message with an **Undo skip** button is centered inside that card box. Prev/Next stay plain month-by-month. "change" figures compare against the most recent prior month that has balances (`previousRecordedMonth`), and that basis is shown as a caption.
+- `clearBalances(month)` action + an inline-confirm **Clear balances** button (only when the month has balances) let a month's balances be removed in-app, so "balances exist" is no longer a dead end for skipping.
+- **Balance input parsing**: `parseBalance` strips `$`, commas, and spaces before `Number()`. `saveBalance`/`saveAllBalances` surface "Enter a valid number." instead of silently no-op'ing, and `saveBalances` returns that error when the cleaned list is empty. This fixes values like `6,537` / `$226,216` that previously failed to persist (they parsed to `NaN`, so the row Save did nothing and the field reverted to the stored value).
+- **Accounts editor fix**: drafts are seeded once per month (via a `seededMonth` ref) and preserved across `router.refresh()` saves, so unsaved edits are no longer clobbered. Previous-month figures are shown only as input **placeholders**, never as values. Per-row **Save** is disabled on an empty field and `saveBalance` no-ops on empty (previously an empty field wrote `0`). Summary cards and the loan "remaining" now use **saved** balances (`savedFor`/`currentValueFor`); an empty month shows `$0.00` and "no saved data" instead of a bogus change. Row "change" is blank when the row has no value.
+- Data note: the first import stored **August 2026** balances as `$0` (the workbook had the wrong month removed at import time); every other month matched. The editor bug above is why manual re-entry of Chase/401k did not stick. Fix: Clear August, then re-import `Expenses.xlsx` with **Overwrite from workbook**. **September 2026** has no balances and is skipped for accounts.
+
+### Month-scoped account archiving (implemented, migration applied)
+
+- `supabase/migrations/0005_account_archive_periods.sql` **is applied**. Adds `account_archive_periods(id, household_id, account_id, start_month, end_month, created_at)`, `end_month` nullable with `end_month > start_month`, index `(household_id, account_id)`, RLS via `is_household_member`, grants to `authenticated, service_role` (not Realtime). Also sets `accounts.archived = false` (the old global flag is deprecated for accounts; category/card archives are separate).
+- An account is archived for month `X` when a period satisfies `start_month <= X and (end_month is null or X < end_month)`, i.e. archived **from its start month onward**. `archiveAccount(id, month)` extends an ongoing period's start back to `month` or inserts `(month, null)`; `unarchiveAccount(id, month)` closes the covering period at `month` (deleting it when empty), so earlier months stay archived and the account becomes active from `month` onward.
+- `accounts/page.tsx` computes the archived account ids for the selected month (server-side) and passes `archivedIds`; `accounts-client.tsx` derives `isArchived(id)` for the row filter, badge, and Archive/Unarchive button, and totals/comparisons use `activeAccounts` (archived always excluded, independent of the "Show archived" toggle).
+- `app-sidebar.tsx` hides accounts archived as of the current month (replaces the old `.eq("archived", false)` filter). Dashboard is unchanged.
+
+### Month navigation + layout cleanup (implemented)
+
+- New shared client component `src/components/month-nav.tsx` renders `[Previous] [<Month Year> ▾] [Next]`; the middle is a `DropdownMenu` (base-ui) whose content is already `overflow-y-auto`, listing every month and scrolling the current one into view on open. The old `This month` quick-jump is gone (the picker replaces it).
+- New helpers in `src/lib/month.ts`: `monthName` (long month only) and `monthRange(from, to)` (inclusive keys, reversed-safe).
+- `/expenses`: header is now `[Expenses] [Previous] [<Month Year> ▾] [Next]` with the `Add recurring items` button (renamed from `Fill recurring`; still calls `fillRecurring`) and the unchanged `By card`/`By category` toggle on the right; the month subtitle was removed. `expenses/page.tsx` derives `months` from the earliest/latest `ledger_entries` month through the current (or viewed) month.
+- `/accounts`: header is `[Accounts] [Previous] [<Month Year> ▾] [Next]` plus an inline right-side `Changes vs <MonthName>` (name only, shown when `hasBalances && prevMonth`; the old standalone caption was removed). `Save balances`, `Skip this month`, `Clear balances` (with Confirm/Cancel), and `Show archived` moved to a row directly under the 4 widget boxes, in that order. `accounts/page.tsx` derives `months` from balance/skip/archive-period months through the current (or viewed) month.
+- `npm run lint` + `npm run build` pass; no DB/schema changes.
+- Follow-up: the month nav is centered on both pages (3-zone `lg:grid-cols-[1fr_auto_1fr]` header: title left, nav center, actions right; stacks on mobile). `Previous`/`Next` are now `ArrowLeft`/`ArrowRight` icon buttons with aria-labels. On `/accounts` the Save/Skip/Clear/Show-archived row is centered under the widgets and `Save balances` uses the outline variant like the rest.
+
+### Branding and color system (implemented)
+
+- Brand colors taken from the provided SVGs: accent orange `#d85700`; dark grays `#101214` / `#e2e2e2` / `#c6c6c6`; light gray `#545454`. Semantic money colors kept: income/positive `#10b981`, expense/negative + errors `#ef4444`.
+- `src/app/globals.css`: `--primary`/`--ring`/`--sidebar-primary` = `#d85700`, `--primary-foreground` = `#101214` (dark text on orange for AA contrast), foreground/muted grays aligned to brand, chart tokens → brand set. Dark background intentionally left as the existing slate (not `#101214`).
+- Assets: `public/brand/{logo,icon}-{light,dark}.svg` (dark logo's background rect removed so it sits transparently); `src/components/brand.tsx` exports `BrandLogo`/`BrandIcon` (next/image, unoptimized, light/dark swap via `dark:hidden`/`hidden dark:block`).
+- Logo placement: sidebar (desktop expanded + mobile drawer) shows the full logo above the search bar, icon only when collapsed; mobile top bar shows the logo; `/login` shows the full logo above the card. The emerald `Leaf` badge was removed; active nav item is now orange (`bg-primary/10 text-primary`).
+- Logo sizing follow-up: `BrandLogo` no longer bakes in a size. The sidebar logo fills the panel width proportionally (`h-auto w-full`, ~80px tall on desktop) and pushes content below it down; collapse/close buttons are absolutely positioned top-right over the logo's empty top strip. Mobile top bar logo is centered and capped at `max-w-[14rem]`. Collapsed sidebar keeps the `size-6` icon.
+- Recolored hardcoded chart/UI colors: dashboard (income green, expense red, net worth/accent orange; summary card left borders), stats bars (income/expense/net), category/card `PALETTE` → brand set, `Other`/`Ungrouped`/no-card grays → `#6b7280`, expenses no-entries warning → orange tints.
+- PWA: `public/icons/icon.svg` and `src/app/icon.svg` = brand icon on a `#101214` rounded square; `manifest.ts` `theme_color: #d85700`, `background_color: #101214`.
+- Data: `supabase/migrations/0006_brand_colors.sql` **applied** — remaps stored `categories`/`cards` colors to the brand palette (RLS preserved). Result: 31 categories `#6b7280`, plus `#d85700`×2, `#f2a65a`×3, `#9ca3af`×3, `#4b5563`×2, `#8c3b00`×2, `#b8865a`×2; all 10 cards `#6b7280`.
+- `npm run lint` + `npm run build` pass.
+
+### Fonts (implemented)
+
+- Font files live in `src/app/fonts/` (loaded with `next/font/local`, so they are fingerprinted/served by the build; not in `public/`): `Comfortaa-Bold.ttf`, `Comfortaa-Light.ttf`, `LouisGeorgeCafe.ttf`, `LouisGeorgeCafe-Bold.ttf`.
+- `src/app/layout.tsx`: `louis` (Louis George Cafe, weights 400/700) → `--font-body`; `comfortaa` (Comfortaa, weights 300/700) → `--font-display`; Geist Mono kept for `--font-mono`.
+- `src/app/globals.css`: `--font-sans: var(--font-body)` (all regular text), `--font-heading: var(--font-display)` (headers; raw var is `--font-display` to avoid self-reference), and a base rule `h1, h2, h3 { @apply font-heading }`. Card/Dialog titles already use `font-heading`. Comfortaa has no 600 face, so `font-semibold` headings render the 700 face.
+- Removed the stray Windows `*:Zone.Identifier` files from the repo root.
+
+### Expenses page: larger body text (implemented)
+
+- `src/app/globals.css`: added a `.text-scale` scope that overrides the text tokens one full step up (`--text-xs` 12→14, `--text-sm` 14→16, `--text-base` 16→18, `--text-lg` 18→20, `--text-xl` 20→24) and forces in-content `select` / `[data-slot="input"]` / `[data-slot="button"]` to `h-10`. Tailwind v4 emits `font-size: var(--text-*)`, so the token override scales every text utility inside the scope at once.
+- `src/app/expenses/expenses-client.tsx`: wrapped the content (sticky totals grid through the Income section) in `<div className="text-scale">`; the header (title, month nav, `Add recurring items` / `By card`) and the no-entries/error banners stay outside so they are unchanged. Dropped `size="sm"` from the in-content Add/Delete buttons so their text scales too.
+- Reminder sentence now reads: "Reminder: enter expenses around the 5th of every month."
+- `npm run lint` + `npm run build` pass.
+
+Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm` 20, `--text-base` 22, `--text-lg` 26, `--text-xl` 32; control height `h-11`). Row breakpoints left at `md` for now; revisit if rows overflow between 768–1024px.
+- Sidebar: reversed account sections to Cash → Investments → Loans; added orange rounded borders around each section; disabled account links inside sections (plain text); centered bottom label/icons; icons visible/centered when collapsed; moved Settings/Stats to bottom row.
+- DB update: `public.accounts` row `House - We Owe` renamed to `Mortgage`.
+- `/expenses` `.text-scale` dialed back one notch to `--text-xs` 16, `--text-sm` 18, `--text-base` 20, `--text-lg` 24, `--text-xl` 30 (control height `h-10`).
+- Then made global: `@theme { --text-xs: .875rem; --text-sm: 1rem; --text-base: 1.125rem; --text-lg: 1.25rem }`; removed `.text-scale` wrapper from /expenses; reverted 6 in-content buttons to `size="sm"`; kept card padding, row layout, whole-dollar ideal.
+- `/expenses` data-card padding reduced to uniform 16px: removed the `CardContent className="p-4"` overrides (By-category, By-card, Income) so the `Card`'s own `py-4` + default content `px-4` apply (was 32px top/bottom + 16px sides from double padding). Summary widgets/sticky bar left at `p-3`; expand/collapse layout unchanged.
+- `/expenses` By-category row header restructured: left = dot · name · `X entries`; right (right-justified) = faded `ideal $XXX` (`text-muted-foreground`) + color-coded `(-$XXX)` (`text-red-600`/`text-green-600`) + total badge. Whole row is the toggle button so it stays clickable. By-card view left unchanged.
+- Added `moneyWhole` to `src/lib/money.ts` (Intl currency, 0 fraction digits). `/expenses` By-category ideal + parenthetical now show whole dollars: `idealRounded = Math.round(ideal)`, `difference = categoryTotal - idealRounded`, rendered via `moneyWhole`. Total badge still uses `money` (cents). Categories page unchanged.
+- Sidebar: reversed account sections to Cash → Investments → Loans; added `rounded-xl border border-orange-500/40 bg-sidebar/40 p-2` around each section; centered bottom label/icons; bottom icons visible/centered when collapsed; kept label hidden when collapsed.
+
+### Expenses page compact redesign (implemented)
+
+- Reworked `src/app/expenses/expenses-client.tsx` for density (mockup-driven). Client-only; no action/schema/RLS changes.
+- Category/By-card/Income boxes are now plain `div.rounded-xl.bg-card.ring-1.ring-foreground/10` (no `Card`), `space-y-2` between them, header `px-3 py-2` with `dot · font-heading name` left and `ideal (whole) · (±diff, red/green) · total (bold) · chevron` right. Expand/collapse preserved via `expanded` Set.
+- Saved purchases render as one-line `text-xs text-muted-foreground` rows: `w-20 tabular-nums amount · label · ml-auto ⋯ menu` (base-ui `DropdownMenu`, `MoreHorizontal`). Label = card name in category view, category name in card/income views (`—` for none). Edit/Delete live in the `⋯` menu.
+- Add row per box: `Input` (h-8, flex-1, placeholder `Amount (e.g. 12.50+8)`, `title` documents Enter/Shift+Enter) + card `select`/category `select` (h-8) + orange `+` `Button size="icon"` (`variant="default"`). **Note field removed** from the default add form; `parseAmountExpression` + Shift+Enter split preserved.
+- New local `EntryDialog` (`ui/dialog`, `sm:max-w-sm`): Amount + Note always; Card shown when `cardOptions` set (category/card views), Category shown when `categoryOptions` set (card/income views). Save → `updateEntry`.
+- Header gains the subtitle "Track and manage your household expenses, one category at a time."; the card-filter `select` moved into the header right zone (category view only). Summary widgets trimmed to `p-2` / `text-base` values. Income section `mt-4`.
+- `QuickDraft` dropped its `note` field; `newIncome` dropped its `note` field.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+
+
+## Checks
+
+- `npm run lint` and `npm run build` pass after every phase.
 
 ## Known issues and unfinished work
 
-- **End-to-end page render with imported data was never verified.** An attempt to forge a Supabase session to drive `/`, `/stats`, etc. was rejected by GoTrue's signature check, so the client pages have not been exercised against the imported records.
-- `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from an unauthenticated public route. Pre-existing and already pushed; flagged for the architecture audit.
-- Category typing overrides applied during import: `Income + Tax Return ($9500)` was set to `income`; `Sign Up Bonuses` was left as `expense`. Only `Ebay Earnings` was inferred as income from the workbook.
-- `next build` warns that the `middleware` file convention is deprecated in Next.js 16 (should migrate to `proxy`).
-- A stale `next dev` process may be listening on port 3000; it can serve outdated CSS.
-- `tsc --noEmit` is not an npm script. `npm run lint` and `npm run build` were re-run and passed at commit `036012c`; nothing else was re-tested at that point.
-
-## Decision: rebuild
-
-A decision has been made to rebuild the application code and structure, because successive fixes have been causing regressions.
-
-## Requirement: preserve the live data
-
-The existing Supabase project, database, login, household, and all imported records must be preserved. No database reset is part of this decision.
+- **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
+- `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 
 ## Next action
 
-Perform a **read-only architecture audit** of the current application and propose a **staged rebuild plan**.
-
-No rebuild has been approved yet. No application code changes, migrations, or database operations are authorized until that plan is reviewed and explicitly approved.
+- Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
