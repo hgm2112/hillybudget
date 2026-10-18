@@ -28,7 +28,7 @@ export default async function CategoriesPage({
       .order("sort_order"),
     supabase
       .from("cards")
-      .select("id, name, color, sort_order")
+      .select("id, name, color, sort_order, archived")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase.from("household_settings").select("ideal_window").eq("household_id", household_id).maybeSingle(),
