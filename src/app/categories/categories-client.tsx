@@ -7,7 +7,7 @@ import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis
 import { cn } from "cn";
 import { money } from "@/lib/money";
 import { monthLabel, shiftMonth } from "@/lib/month";
-import { categoryIcon } from "@/lib/category-icons";
+import { CATEGORY_ICONS, CATEGORY_ICON_NAMES, categoryIcon } from "@/lib/category-icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +61,7 @@ type Category = {
   group_id: string | null;
   ideal_override: number | null;
   ideal: number;
+  icon: string | null;
 };
 type Group = { id: string; name: string; color: string; sort_order: number };
 type CardItem = { id: string; name: string; color: string; sort_order: number; archived: boolean };
@@ -297,7 +298,7 @@ export function CategoriesClient({
                   {excluded.map((category) => {
                     return (
                       <div key={category.id} className="flex items-center gap-2 rounded-md px-1 py-1 text-sm">
-                        {createElement(categoryIcon(category.name), { className: "size-4 text-muted-foreground" })}
+                        {createElement(categoryIcon(category), { className: "size-4 text-muted-foreground" })}
                         <span className="min-w-0 flex-1 truncate">{category.name}</span>
                         <span className="tabular-nums text-muted-foreground">{money(spentOf(category.id))}</span>
                         <Button variant="ghost" size="icon-xs" aria-label="Include in budget" onClick={() => run(setExcluded(category.id, false))}>
@@ -383,7 +384,7 @@ export function CategoriesClient({
                 {listCategories.map(({ category, spent }) => {
                   return (
                     <div key={category.id} className="grid grid-cols-[1.25rem_1fr_auto_auto] items-center gap-2 rounded px-1 py-0.5 text-sm">
-                      {createElement(categoryIcon(category.name), { className: "size-4 text-muted-foreground" })}
+                      {createElement(categoryIcon(category), { className: "size-4 text-muted-foreground" })}
                       <span className="truncate">{category.name}</span>
                       <span className="tabular-nums">{money(spent)}</span>
                       <span className="tabular-nums text-muted-foreground">{money(category.ideal)}</span>
@@ -412,10 +413,11 @@ export function CategoriesClient({
                   color: payload.color,
                   group_id: payload.group_id,
                   ideal_override: payload.ideal_override,
+                  icon: payload.icon,
                 })
               );
             }
-            const ok = await run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color }));
+            const ok = await run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color, icon: payload.icon }));
             return ok;
           }}
         />
@@ -458,7 +460,7 @@ function CategoryRow({
 }) {
   return (
     <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
-      {createElement(categoryIcon(category.name), { className: "size-4 shrink-0 text-muted-foreground" })}
+      {createElement(categoryIcon(category), { className: "size-4 shrink-0 text-muted-foreground" })}
       <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
       <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
       <span className="w-16 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
@@ -519,6 +521,7 @@ function CategoryDialog({
     color: string;
     group_id: string | null;
     ideal_override: number | null;
+    icon: string | null;
   }) => Promise<boolean>;
 }) {
   const [name, setName] = useState(editing?.name ?? "");
@@ -526,7 +529,15 @@ function CategoryDialog({
   const [color, setColor] = useState(editing?.color ?? PALETTE[0]);
   const [groupId, setGroupId] = useState(editing?.group_id ?? "");
   const [budget, setBudget] = useState(editing?.ideal_override == null ? "" : String(editing.ideal_override));
+  const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
+  const [iconQuery, setIconQuery] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const filteredIcons = useMemo(() => {
+    const query = iconQuery.trim().toLowerCase();
+    if (!query) return CATEGORY_ICON_NAMES;
+    return CATEGORY_ICON_NAMES.filter((name) => name.toLowerCase().includes(query));
+  }, [iconQuery]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -537,6 +548,7 @@ function CategoryDialog({
       color,
       group_id: groupId || null,
       ideal_override: budget.trim() === "" ? null : Number(budget),
+      icon,
     });
     setBusy(false);
     if (ok) onClose();
@@ -569,6 +581,51 @@ function CategoryDialog({
             <div className="space-y-1">
               <Label htmlFor="category-color">Color</Label>
               <Input id="category-color" type="color" value={color} onChange={(event) => setColor(event.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Icon</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={iconQuery}
+                onChange={(event) => setIconQuery(event.target.value)}
+                placeholder="Search icons"
+                className="h-8"
+              />
+              <Button
+                type="button"
+                variant={icon === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setIcon(null)}
+              >
+                Auto
+              </Button>
+            </div>
+            <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-md border p-2">
+              {filteredIcons.map((iconName) => {
+                const Icon = CATEGORY_ICONS[iconName];
+                return (
+                  <button
+                    key={iconName}
+                    type="button"
+                    title={iconName}
+                    aria-label={iconName}
+                    aria-pressed={icon === iconName}
+                    onClick={() => setIcon(iconName)}
+                    className={cn(
+                      "grid size-8 place-items-center rounded-md border",
+                      icon === iconName
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-transparent hover:bg-muted"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </button>
+                );
+              })}
+              {filteredIcons.length === 0 && (
+                <p className="px-1 py-2 text-xs text-muted-foreground">No icons match.</p>
+              )}
             </div>
           </div>
           <div className="space-y-1">

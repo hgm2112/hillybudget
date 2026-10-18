@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/session";
+import { CATEGORY_ICON_NAMES } from "@/lib/category-icons";
 
 export type ActionResult = { error?: string };
 
@@ -16,11 +17,13 @@ type CategoryPatch = Partial<{
   excluded: boolean;
   group_id: string | null;
   ideal_override: number | null;
+  icon: string | null;
 }>;
 type CardPatch = Partial<{ name: string; color: string; archived: boolean }>;
 type GroupPatch = Partial<{ name: string; color: string }>;
 
 const COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+const ICON_NAMES = new Set(CATEGORY_ICON_NAMES);
 
 async function context() {
   const membership = await requireHousehold();
@@ -32,10 +35,13 @@ export async function addCategory(input: {
   name: string;
   kind: CategoryKind;
   color: string;
+  icon?: string | null;
 }): Promise<ActionResult> {
   const name = input.name.trim();
   if (!name) return { error: "Name is required." };
   if (!COLOR_RE.test(input.color)) return { error: "Invalid color." };
+  const icon = input.icon ?? null;
+  if (icon !== null && !ICON_NAMES.has(icon)) return { error: "Invalid icon." };
   const kind: CategoryKind = input.kind === "income" ? "income" : "expense";
 
   const { supabase, householdId } = await context();
@@ -52,6 +58,7 @@ export async function addCategory(input: {
     name,
     kind,
     color: input.color,
+    icon,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
   if (error) {
@@ -78,6 +85,10 @@ export async function updateCategory(id: string, patch: CategoryPatch): Promise<
   if (patch.archived !== undefined) clean.archived = patch.archived;
   if (patch.excluded !== undefined) clean.excluded = patch.excluded;
   if (patch.group_id !== undefined) clean.group_id = patch.group_id;
+  if (patch.icon !== undefined) {
+    if (patch.icon !== null && !ICON_NAMES.has(patch.icon)) return { error: "Invalid icon." };
+    clean.icon = patch.icon;
+  }
   if (patch.ideal_override !== undefined) {
     if (patch.ideal_override === null) {
       clean.ideal_override = null;

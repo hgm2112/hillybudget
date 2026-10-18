@@ -18,7 +18,7 @@ export default async function CategoriesPage({
   const [{ data: categories }, { data: groups }, { data: cards }, { data: settings }, { data: totals }] = await Promise.all([
     supabase
       .from("categories")
-      .select("id, name, color, kind, sort_order, archived, excluded, group_id, ideal_override")
+      .select("id, name, color, kind, sort_order, archived, excluded, group_id, ideal_override, icon")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase
