@@ -264,8 +264,10 @@ export function CategoriesClient({
                       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
                       <span className="min-w-0 truncate text-sm font-medium">{group.name}</span>
                       <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
-                      <span className="ml-auto shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {money(groupSpent)} / {money(groupBudget)}
+                      <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
+                        <span className="w-16 text-right text-muted-foreground">{money(groupBudget)}</span>
+                        <span className="w-16 text-right">{money(groupSpent)}</span>
+                        <span className="w-6" aria-hidden />
                       </span>
                     </div>
                     <div className="space-y-0.5">
@@ -458,8 +460,8 @@ function CategoryRow({
     <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
       {createElement(categoryIcon(category.name), { className: "size-4 shrink-0 text-muted-foreground" })}
       <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
-      <span className="w-16 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
       <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
+      <span className="w-16 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
