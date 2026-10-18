@@ -117,7 +117,16 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `QuickDraft` dropped its `note` field; `newIncome` dropped its `note` field.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Payment-method archive/delete + unique colors (implemented)
 
+- **Root cause of "can't delete a card":** `deleteCard` archived cards that had ledger entries instead of deleting them, and the Manage list never filtered `archived`. The four names in the report are actually the *name of one archived card* (`Citi, Hill Ink Pref., Hyatt, Will Chase Res`) created by an earlier import — visible on the archived card row, not four separate cards.
+- `src/app/categories/actions.ts`: `deleteCard` now always hard-deletes. FKs `ledger_entries.card_id` and `recurring_items.card_id` are `on delete set null`, so past entries keep their amount/category/note and just show as **No card**.
+- `src/app/categories/categories-client.tsx` + `page.tsx`: `CardItem` carries `archived`; the Manage dialog splits into **Payment methods** (active) and an **Archived payment methods** section. Active rows have inline rename/color plus **Archive** and **Delete**; the archived section has **Restore** and **Delete**. Delete uses an inline two-step confirm (Delete → Delete/Cancel).
+- `src/app/expenses/{page,expenses-client}.tsx`: `cards` query now selects `archived`; archived cards are excluded from the quick-add and card-filter selectors but stay in the **By-card** view so history remains grouped. Recurring already filtered archived.
+- PR #4 (`fix/card-archive-and-delete`), squash-merged to `main` as `ff4bbff`.
+- **Data migration `0007_card_colors.sql` applied** (PR #5, `d2fd004`): gives every card a distinct color per household, ordered by `sort_order`/`name`, drawing on the household's `category_groups.color` values first then a brand fallback list (`#d85700, #f2a65a, #8c3b00, #b8865a, #d1a37a, #6b7280, #9ca3af, #4b5563, #a15c1e`), guaranteeing ≥9 distinct colors. `PALETTE` in `categories-client.tsx` extended with `#a15c1e`.
+- Applied with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`; `supabase migration list` confirms `0007` local = remote. Verified live: the 9 active cards now carry 9 distinct colors (the first 9 `category_groups` colors, reused as requested) and the archived card carries the 10th.
+- `npm run lint` + `npm run build` pass. No runtime smoke test of the new dialog actions.
 
 ## Checks
 
