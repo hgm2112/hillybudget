@@ -91,6 +91,7 @@ export function CategoriesClient({
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [categoryDialog, setCategoryDialog] = useState<{ editing: Category | null } | null>(null);
+  const [groupDialog, setGroupDialog] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
 
   function refresh() {
@@ -195,6 +196,9 @@ export function CategoriesClient({
         </div>
         <Button size="sm" onClick={() => setCategoryDialog({ editing: null })}>
           <Plus className="size-4" /> New category
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setGroupDialog(true)}>
+          <Plus className="size-4" /> New group
         </Button>
         <Button size="sm" variant="outline" onClick={() => setManageOpen(true)}>
           <Settings2 className="size-4" /> Manage
@@ -412,6 +416,13 @@ export function CategoriesClient({
         />
       )}
 
+      {groupDialog && (
+        <GroupDialog
+          onClose={() => setGroupDialog(false)}
+          onSave={(payload) => run(addGroup(payload))}
+        />
+      )}
+
       {manageOpen && (
         <ManageDialog
           idealWindow={idealWindow}
@@ -597,6 +608,70 @@ function CategoryDialog({
             </Button>
             <Button type="submit" disabled={busy}>
               {editing ? "Save" : "Add"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GroupDialog({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (payload: { name: string; color: string }) => Promise<boolean>;
+}) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(PALETTE[3]);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    const ok = await onSave({ name, color });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>New group</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="group-name">Name</Label>
+            <Input id="group-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1">
+            <Label>Color</Label>
+            <div className="flex flex-wrap gap-2">
+              {PALETTE.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  aria-label={`Color ${swatch}`}
+                  aria-pressed={color === swatch}
+                  onClick={() => setColor(swatch)}
+                  className={cn(
+                    "size-6 rounded-full ring-2 ring-offset-2 ring-offset-popover",
+                    color === swatch ? "ring-foreground" : "ring-transparent"
+                  )}
+                  style={{ backgroundColor: swatch }}
+                />
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              Add
             </Button>
           </DialogFooter>
         </form>
