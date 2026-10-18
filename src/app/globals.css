@@ -140,3 +140,11 @@
     @apply font-heading;
   }
 }
+
+.group-tint {
+  background-color: color-mix(in oklab, var(--group-color) 12%, transparent);
+}
+
+.dark .group-tint {
+  background-color: color-mix(in oklab, var(--group-color) 24%, transparent);
+}
