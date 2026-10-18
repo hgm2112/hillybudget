@@ -137,6 +137,14 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - In the grouped "Regular categories" widget the faded ideal amount now renders left of the actual month amount, in both category rows and the group header. The group header's two `w-16` columns plus a `w-6` spacer match the rows' `⋯` button, so the group numbers align above the category numbers. PR #13, `72d5df0`.
 - Group names are `text-base font-bold` and the group actual total is `text-sm font-bold` (the fonts only ship 400/700 faces, so `font-medium`/`font-semibold` were not real weights). PR #15, `407984b`.
 
+### Per-category icons (implemented, migration applied)
+
+- `supabase/migrations/0008_category_icons.sql` **is applied** — adds nullable `categories.icon text`. Null means "Auto" (name-based fallback), so nothing changes until an icon is picked. No RLS/grant changes needed.
+- `src/lib/category-icons.ts` now exports a curated `CATEGORY_ICONS` registry (~70 household/budget icons) + `CATEGORY_ICON_NAMES`, and `categoryIcon({ name, icon })` returns the stored icon when set, else the existing regex rules, else `Tag`. The old `categoryIcon(name)` signature is gone; the 3 call sites on `/categories` pass the category object.
+- `categories/page.tsx` selects `icon`; `Category` type has `icon: string | null`.
+- `CategoryDialog` (used by both New and Edit via `⋯ → Edit`) has an **Icon** section: search box, wrapped icon grid, and an **Auto** button to clear the override. Server actions (`addCategory`/`updateCategory`) validate the icon name against the registry.
+- Icons render in the grouped list, the flat "All regular categories" list, and the excluded list. PR #17, `5842fa3`.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
