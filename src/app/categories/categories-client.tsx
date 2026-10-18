@@ -278,10 +278,7 @@ export function CategoriesClient({
           <div className="space-y-4">
             <Card>
               <CardContent className="space-y-1 p-4">
-                <div
-                  className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
-                  style={{ "--group-color": "#d85700" } as React.CSSProperties}
-                >
+                <div className="-mx-4 flex items-center gap-2 px-5 py-1">
                   <span className="min-w-0 truncate text-base font-bold">Regular categories</span>
                   <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs">
                     <span className="w-20 text-right text-muted-foreground">Spending</span>
@@ -299,7 +296,7 @@ export function CategoriesClient({
                     <div key={group.id || "ungrouped"} className="space-y-1 pt-1">
                       <div
                         className={cn(
-                          "group-tint group -mx-4 flex items-center gap-2 px-5 py-1",
+                          "group-tint group -mx-4 flex items-center gap-2 rounded-lg px-5 py-1",
                           dragGroup === group.id && "opacity-50",
                           overGroup === group.id && "ring-2 ring-inset ring-primary"
                         )}
@@ -566,7 +563,7 @@ function CategoryRow({
           }}
           className={cn(
             "shrink-0 rounded p-0.5 transition-colors",
-            recurringOn ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground"
+            recurringOn ? "text-primary" : "text-muted-foreground/20 hover:text-muted-foreground"
           )}
         >
           <Repeat className="size-4" />
@@ -836,18 +833,17 @@ function CategoryDetail({
         </div>
 
         <div className="space-y-3 border-t pt-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">Recurring expense</span>
+          <div className="grid grid-cols-3 divide-x overflow-hidden rounded-lg border text-sm">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className="font-semibold">Recurring expense</span>
               <Switch
                 checked={recurringOn}
                 onCheckedChange={(checked) => onAction(setCategoryRecurring(category.id, { enabled: checked }))}
                 aria-label="Recurring expense"
               />
             </div>
-            <span className="text-muted-foreground/40" aria-hidden>|</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">Custom ideal</span>
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className="font-semibold">Custom ideal</span>
               <Switch
                 checked={budgetOn}
                 disabled={category.no_ideal}
@@ -855,9 +851,8 @@ function CategoryDetail({
                 aria-label="Custom ideal"
               />
             </div>
-            <span className="text-muted-foreground/40" aria-hidden>|</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">Ideal</span>
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className="font-semibold">Ideal</span>
               <Switch checked={!category.no_ideal} onCheckedChange={setIdeal} aria-label="Ideal" />
             </div>
           </div>
