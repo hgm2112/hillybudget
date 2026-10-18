@@ -4,13 +4,9 @@ import { createElement, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive,
-  ChevronLeft,
-  ChevronRight,
   Eye,
-  EyeOff,
+  GripVertical,
   ListChecks,
-  MoreHorizontal,
-  Pencil,
   Plus,
   Repeat,
   Settings2,
@@ -37,24 +33,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   addCard,
   addCategory,
   addGroup,
   deleteCard,
   deleteCategory,
   deleteGroup,
-  moveCategory,
-  moveGroup,
+  reorderCategories,
+  reorderGroups,
   saveIdealWindow,
   setCategoryGroup,
   setCategoryRecurring,
@@ -74,6 +60,7 @@ type Category = {
   sort_order: number;
   archived: boolean;
   excluded: boolean;
+  no_ideal: boolean;
   group_id: string | null;
   ideal_override: number | null;
   ideal: number;
@@ -122,9 +109,13 @@ export function CategoriesClient({
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("12M");
-  const [categoryDialog, setCategoryDialog] = useState<{ editing: Category | null } | null>(null);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [groupDialog, setGroupDialog] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [dragCat, setDragCat] = useState<string | null>(null);
+  const [overCat, setOverCat] = useState<string | null>(null);
+  const [dragGroup, setDragGroup] = useState<string | null>(null);
+  const [overGroup, setOverGroup] = useState<string | null>(null);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -220,6 +211,42 @@ export function CategoriesClient({
     run(setCategoryRecurring(category.id, { enabled }));
   }
 
+  function groupIdOf(id: string) {
+    for (const entry of groupsWithCategories) {
+      if (entry.categories.some((category) => category.id === id)) return entry.group.id;
+    }
+    return null;
+  }
+
+  function dropCategory(targetId: string) {
+    const source = dragCat;
+    setDragCat(null);
+    setOverCat(null);
+    if (!source || source === targetId) return;
+    if (groupIdOf(source) !== groupIdOf(targetId)) return;
+    const displayIds = groupsWithCategories.flatMap((entry) => entry.categories.map((category) => category.id));
+    const from = displayIds.indexOf(source);
+    const to = displayIds.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    displayIds.splice(from, 1);
+    displayIds.splice(to, 0, source);
+    run(reorderCategories([...displayIds, ...excluded.map((category) => category.id)]));
+  }
+
+  function dropGroup(targetId: string) {
+    const source = dragGroup;
+    setDragGroup(null);
+    setOverGroup(null);
+    if (!source || source === targetId) return;
+    const ids = groups.map((group) => group.id);
+    const from = ids.indexOf(source);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, source);
+    run(reorderGroups(ids));
+  }
+
   return (
     <>
       <div className="relative grid grid-cols-1 items-center gap-3 p-4 md:p-8 md:pb-0 lg:grid-cols-[1fr_auto_1fr]">
@@ -232,7 +259,7 @@ export function CategoriesClient({
           <MonthNav value={month} months={months} onSelect={(value) => router.push(`/categories?month=${value}`)} />
         </div>
         <div className="flex items-center justify-end gap-2">
-          <Button size="sm" onClick={() => setCategoryDialog({ editing: null })}>
+          <Button size="sm" onClick={() => setNewCategoryOpen(true)}>
             <Plus className="size-4" /> New category
           </Button>
           <Button size="sm" variant="outline" onClick={() => setGroupDialog(true)}>
@@ -271,8 +298,22 @@ export function CategoriesClient({
                   return (
                     <div key={group.id || "ungrouped"} className="space-y-1 pt-1">
                       <div
-                        className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
+                        className={cn(
+                          "group-tint group -mx-4 flex items-center gap-2 px-5 py-1",
+                          dragGroup === group.id && "opacity-50",
+                          overGroup === group.id && "ring-2 ring-inset ring-primary"
+                        )}
                         style={{ "--group-color": group.color } as React.CSSProperties}
+                        onDragOver={(event) => {
+                          if (!dragGroup || !group.id || dragGroup === group.id) return;
+                          event.preventDefault();
+                          setOverGroup(group.id);
+                        }}
+                        onDrop={(event) => {
+                          if (!dragGroup || !group.id) return;
+                          event.preventDefault();
+                          dropGroup(group.id);
+                        }}
                       >
                         <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
                         <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
@@ -280,7 +321,22 @@ export function CategoriesClient({
                         <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
                           <span className="w-20 text-right">{money(groupSpent)}</span>
                           <span className="w-20 text-right text-muted-foreground">{money(groupBudget)}</span>
-                          <span className="w-6" aria-hidden />
+                          {group.id ? (
+                            <span
+                              draggable
+                              onDragStart={() => setDragGroup(group.id)}
+                              onDragEnd={() => {
+                                setDragGroup(null);
+                                setOverGroup(null);
+                              }}
+                              title="Drag to reorder groups"
+                              className="grid w-6 cursor-grab place-items-center text-muted-foreground opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+                            >
+                              <GripVertical className="size-4" />
+                            </span>
+                          ) : (
+                            <span className="w-6" aria-hidden />
+                          )}
                         </span>
                       </div>
                       <div className="space-y-0.5">
@@ -293,9 +349,19 @@ export function CategoriesClient({
                             recurringOn={Boolean(recurring[category.id])}
                             onSelect={() => setSelectedId(category.id)}
                             onToggleRecurring={(enabled) => toggleRecurring(category, enabled)}
-                            onEdit={() => setCategoryDialog({ editing: category })}
-                            groups={groups}
-                            onAction={run}
+                            dragging={dragCat === category.id}
+                            dropTarget={overCat === category.id}
+                            onDragStart={() => setDragCat(category.id)}
+                            onDragEnd={() => {
+                              setDragCat(null);
+                              setOverCat(null);
+                            }}
+                            onDragOver={() => {
+                              if (dragCat && dragCat !== category.id && groupIdOf(dragCat) === group.id) {
+                                setOverCat(category.id);
+                              }
+                            }}
+                            onDrop={() => dropCategory(category.id)}
                           />
                         ))}
                       </div>
@@ -390,6 +456,10 @@ export function CategoriesClient({
                 spent={spentOf(selected.id)}
                 onAction={run}
                 onViewAll={() => router.push(`/expenses?month=${month}&category=${selected.id}`)}
+                onArchive={() => {
+                  setSelectedId(null);
+                  run(updateCategory(selected.id, { archived: true }));
+                }}
               />
             ) : (
               <Card>
@@ -400,27 +470,12 @@ export function CategoriesClient({
         </div>
       </div>
 
-      {categoryDialog && (
+      {newCategoryOpen && (
         <CategoryDialog
-          key={categoryDialog.editing?.id ?? "new"}
-          editing={categoryDialog.editing}
-          groups={groups}
-          onClose={() => setCategoryDialog(null)}
-          onSave={async (payload) => {
-            if (categoryDialog.editing) {
-              return run(
-                updateCategory(categoryDialog.editing.id, {
-                  name: payload.name,
-                  kind: payload.kind,
-                  color: payload.color,
-                  group_id: payload.group_id,
-                  ideal_override: payload.ideal_override,
-                  icon: payload.icon,
-                })
-              );
-            }
-            return run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color, icon: payload.icon }));
-          }}
+          onClose={() => setNewCategoryOpen(false)}
+          onSave={(payload) =>
+            run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color, icon: payload.icon }))
+          }
         />
       )}
 
@@ -450,9 +505,12 @@ function CategoryRow({
   recurringOn,
   onSelect,
   onToggleRecurring,
-  onEdit,
-  groups,
-  onAction,
+  dragging,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }: {
   category: Category;
   spent: number;
@@ -460,9 +518,12 @@ function CategoryRow({
   recurringOn: boolean;
   onSelect: () => void;
   onToggleRecurring: (enabled: boolean) => void;
-  onEdit: () => void;
-  groups: Group[];
-  onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
+  dragging: boolean;
+  dropTarget: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
 }) {
   return (
     <div
@@ -476,9 +537,19 @@ function CategoryRow({
           onSelect();
         }
       }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        onDragOver();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop();
+      }}
       className={cn(
         "group flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50",
-        selected && "bg-primary/10"
+        selected && "bg-primary/10",
+        dragging && "opacity-50",
+        dropTarget && "ring-2 ring-inset ring-primary"
       )}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -502,51 +573,17 @@ function CategoryRow({
         </button>
       </span>
       <span className="w-20 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
-      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
-      <span onClick={(event) => event.stopPropagation()}>
-        <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Options for ${category.name}`}
-              className="opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100"
-            />
-          }
-        >
-          <MoreHorizontal className="size-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="size-4" /> Edit
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Move to group</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => onAction(setCategoryGroup(category.id, null))}>No group</DropdownMenuItem>
-              {groups.map((group) => (
-                <DropdownMenuItem key={group.id} onClick={() => onAction(setCategoryGroup(category.id, group.id))}>
-                  {group.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onAction(moveCategory(category.id, -1))}>Move up</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onAction(moveCategory(category.id, 1))}>Move down</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onAction(setExcluded(category.id, true))}>
-            <EyeOff className="size-4" /> Exclude from budget
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onAction(updateCategory(category.id, { archived: true }))}>
-            <Archive className="size-4" /> Archive
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={() => onAction(deleteCategory(category.id))}>
-            <Trash2 className="size-4" /> Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-        </DropdownMenu>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{category.no_ideal ? "" : money(category.ideal)}</span>
+      <span
+        draggable
+        aria-label={`Reorder ${category.name}`}
+        title="Drag to reorder"
+        onClick={(event) => event.stopPropagation()}
+        onDragStart={() => onDragStart()}
+        onDragEnd={() => onDragEnd()}
+        className="grid w-6 shrink-0 cursor-grab place-items-center text-muted-foreground opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" />
       </span>
     </div>
   );
@@ -561,6 +598,7 @@ function CategoryDetail({
   spent,
   onAction,
   onViewAll,
+  onArchive,
 }: {
   category: Category;
   group: Group | null;
@@ -570,13 +608,20 @@ function CategoryDetail({
   spent: number;
   onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
   onViewAll: () => void;
+  onArchive: () => void;
 }) {
+  const [iconQuery, setIconQuery] = useState("");
   const recurringOn = Boolean(recurring);
   const budgetOn = category.ideal_override != null;
   const effectiveBudget = category.ideal_override ?? category.ideal;
   const budgetDisplay = category.ideal_override != null ? category.ideal_override : Math.round(category.ideal);
   const difference = spent - category.ideal;
   const groupColor = group?.color ?? "#6b7280";
+  const filteredIcons = useMemo(() => {
+    const query = iconQuery.trim().toLowerCase();
+    if (!query) return CATEGORY_ICON_NAMES;
+    return CATEGORY_ICON_NAMES.filter((name) => name.toLowerCase().includes(query));
+  }, [iconQuery]);
 
   function commitName(value: string) {
     const trimmed = value.trim();
@@ -596,6 +641,22 @@ function CategoryDetail({
     if (!Number.isFinite(amount) || amount < 0) return;
     if (amount === category.ideal_override) return;
     onAction(updateCategory(category.id, { ideal_override: amount }));
+  }
+
+  function setIdeal(enabled: boolean) {
+    if (enabled) {
+      onAction(updateCategory(category.id, { no_ideal: false }));
+    } else {
+      onAction(updateCategory(category.id, { no_ideal: true, ideal_override: null }));
+    }
+  }
+
+  function setCustomIdeal(enabled: boolean) {
+    if (enabled) {
+      onAction(updateCategory(category.id, { no_ideal: false, ideal_override: Math.round(effectiveBudget * 100) / 100 }));
+    } else {
+      onAction(updateCategory(category.id, { ideal_override: null }));
+    }
   }
 
   return (
@@ -625,12 +686,21 @@ function CategoryDetail({
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Ideal</p>
-            <p className="text-lg font-semibold tabular-nums">{money(category.ideal)}</p>
+            <p className="text-lg font-semibold tabular-nums">{category.no_ideal ? "—" : money(category.ideal)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Difference</p>
-            <p className={cn("text-lg font-semibold tabular-nums", difference > 0 ? "text-red-600" : "text-green-600")}>
-              {money(difference)}
+            <p
+              className={cn(
+                "text-lg font-semibold tabular-nums",
+                category.no_ideal
+                  ? "text-muted-foreground"
+                  : difference > 0
+                    ? "text-red-600"
+                    : "text-green-600"
+              )}
+            >
+              {category.no_ideal ? "—" : money(difference)}
             </p>
           </div>
         </div>
@@ -661,18 +731,137 @@ function CategoryDetail({
                 ))}
               </select>
             </div>
+            <div className="space-y-1">
+              <Label htmlFor={`detail-kind-${category.id}`}>Type</Label>
+              <select
+                id={`detail-kind-${category.id}`}
+                value={category.kind}
+                onChange={(event) => onAction(updateCategory(category.id, { kind: event.target.value as CategoryKind }))}
+                className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+              >
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Color</Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {PALETTE.map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    aria-label={`Color ${swatch}`}
+                    aria-pressed={category.color.toLowerCase() === swatch.toLowerCase()}
+                    onClick={() => onAction(updateCategory(category.id, { color: swatch }))}
+                    className={cn(
+                      "size-5 rounded-full ring-2 ring-offset-2 ring-offset-card",
+                      category.color.toLowerCase() === swatch.toLowerCase() ? "ring-foreground" : "ring-transparent"
+                    )}
+                    style={{ backgroundColor: swatch }}
+                  />
+                ))}
+                <Input
+                  type="color"
+                  key={category.color}
+                  defaultValue={category.color}
+                  aria-label="Custom color"
+                  className="h-7 w-10 shrink-0 p-1"
+                  onBlur={(event) => {
+                    const value = event.currentTarget.value;
+                    if (value.toLowerCase() !== category.color.toLowerCase()) {
+                      onAction(updateCategory(category.id, { color: value }));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Icon</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={iconQuery}
+                onChange={(event) => setIconQuery(event.target.value)}
+                placeholder="Search icons"
+                className="h-8"
+              />
+              <Button
+                type="button"
+                variant={category.icon === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => onAction(updateCategory(category.id, { icon: null }))}
+              >
+                Auto
+              </Button>
+            </div>
+            <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-md border p-2">
+              {filteredIcons.map((iconName) => {
+                const Icon = CATEGORY_ICONS[iconName];
+                return (
+                  <button
+                    key={iconName}
+                    type="button"
+                    title={iconName}
+                    aria-label={iconName}
+                    aria-pressed={category.icon === iconName}
+                    onClick={() => onAction(updateCategory(category.id, { icon: iconName }))}
+                    className={cn(
+                      "grid size-8 place-items-center rounded-md border",
+                      category.icon === iconName
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-transparent hover:bg-muted"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </button>
+                );
+              })}
+              {filteredIcons.length === 0 && (
+                <p className="px-1 py-2 text-xs text-muted-foreground">No icons match.</p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-3 border-t pt-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Recurring expense</h3>
-            <Switch
-              checked={recurringOn}
-              onCheckedChange={(checked) => onAction(setCategoryRecurring(category.id, { enabled: checked }))}
-              aria-label="Recurring expense"
-            />
+        <div className="flex items-center justify-between border-t pt-3">
+          <div>
+            <h3 className="text-sm font-semibold">Excluded from budget</h3>
+            <p className="text-xs text-muted-foreground">Not counted toward the budget total.</p>
           </div>
+          <Switch
+            checked={category.excluded}
+            onCheckedChange={(checked) => onAction(setExcluded(category.id, checked))}
+            aria-label="Excluded from budget"
+          />
+        </div>
+
+        <div className="space-y-3 border-t pt-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Recurring expense</span>
+              <Switch
+                checked={recurringOn}
+                onCheckedChange={(checked) => onAction(setCategoryRecurring(category.id, { enabled: checked }))}
+                aria-label="Recurring expense"
+              />
+            </div>
+            <span className="text-muted-foreground/40" aria-hidden>|</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Custom ideal</span>
+              <Switch
+                checked={budgetOn}
+                disabled={category.no_ideal}
+                onCheckedChange={setCustomIdeal}
+                aria-label="Custom ideal"
+              />
+            </div>
+            <span className="text-muted-foreground/40" aria-hidden>|</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Ideal</span>
+              <Switch checked={!category.no_ideal} onCheckedChange={setIdeal} aria-label="Ideal" />
+            </div>
+          </div>
+
           {recurringOn && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
@@ -718,54 +907,51 @@ function CategoryDetail({
               </div>
             </div>
           )}
-        </div>
 
-        <div className="space-y-3 border-t pt-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Monthly budget (optional)</h3>
-            <Switch
-              checked={budgetOn}
-              onCheckedChange={(checked) =>
-                onAction(
-                  updateCategory(category.id, {
-                    ideal_override: checked ? Math.round(effectiveBudget * 100) / 100 : null,
-                  })
-                )
-              }
-              aria-label="Monthly budget"
-            />
-          </div>
-          <div className="relative">
-            <Input
-              key={budgetDisplay}
-              defaultValue={budgetDisplay}
-              onBlur={(event) => commitBudget(event.currentTarget.value)}
-              inputMode="decimal"
-              className="pr-8 tabular-nums"
-            />
-            <button
-              type="button"
-              aria-label="Clear budget override"
-              onClick={() => onAction(updateCategory(category.id, { ideal_override: null }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
+          {budgetOn && !category.no_ideal && (
+            <div className="relative">
+              <Input
+                key={budgetDisplay}
+                defaultValue={budgetDisplay}
+                onBlur={(event) => commitBudget(event.currentTarget.value)}
+                inputMode="decimal"
+                className="pr-8 tabular-nums"
+              />
+              <button
+                type="button"
+                aria-label="Clear budget override"
+                onClick={() => onAction(updateCategory(category.id, { ideal_override: null }))}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          {category.no_ideal && (
+            <p className="text-xs text-muted-foreground">
+              No ideal for this category. Spending still counts toward the group total.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-between border-t pt-3">
           <Button variant="outline" size="sm" onClick={onViewAll}>
             <ListChecks className="size-4" /> View all transactions
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onAction(deleteCategory(category.id))}
-          >
-            <Trash2 className="size-4" /> Delete
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onArchive}>
+              <Archive className="size-4" /> Archive
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => onAction(deleteCategory(category.id))}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -773,29 +959,21 @@ function CategoryDetail({
 }
 
 function CategoryDialog({
-  editing,
-  groups,
   onClose,
   onSave,
 }: {
-  editing: Category | null;
-  groups: Group[];
   onClose: () => void;
   onSave: (payload: {
     name: string;
     kind: CategoryKind;
     color: string;
-    group_id: string | null;
-    ideal_override: number | null;
     icon: string | null;
   }) => Promise<boolean>;
 }) {
-  const [name, setName] = useState(editing?.name ?? "");
-  const [kind, setKind] = useState<CategoryKind>(editing?.kind ?? "expense");
-  const [color, setColor] = useState(editing?.color ?? PALETTE[0]);
-  const [groupId, setGroupId] = useState(editing?.group_id ?? "");
-  const [budget, setBudget] = useState(editing?.ideal_override == null ? "" : String(editing.ideal_override));
-  const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<CategoryKind>("expense");
+  const [color, setColor] = useState(PALETTE[0]);
+  const [icon, setIcon] = useState<string | null>(null);
   const [iconQuery, setIconQuery] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -808,14 +986,7 @@ function CategoryDialog({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
-    const ok = await onSave({
-      name,
-      kind,
-      color,
-      group_id: groupId || null,
-      ideal_override: budget.trim() === "" ? null : Number(budget),
-      icon,
-    });
+    const ok = await onSave({ name, kind, color, icon });
     setBusy(false);
     if (ok) onClose();
   }
@@ -824,7 +995,7 @@ function CategoryDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit category" : "New category"}</DialogTitle>
+          <DialogTitle>New category</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
@@ -894,40 +1065,12 @@ function CategoryDialog({
               )}
             </div>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="category-group">Group</Label>
-            <select
-              id="category-group"
-              value={groupId}
-              onChange={(event) => setGroupId(event.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="">No group</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="category-budget">Monthly budget override</Label>
-            <Input
-              id="category-budget"
-              type="number"
-              min="0"
-              step="0.01"
-              value={budget}
-              onChange={(event) => setBudget(event.target.value)}
-              placeholder="Leave blank to use the trailing average"
-            />
-          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy}>
-              {editing ? "Save" : "Add"}
+            <Button type="submit" disabled={busy || !name.trim()}>
+              Add
             </Button>
           </DialogFooter>
         </form>
@@ -1053,12 +1196,6 @@ function ManageDialog({
                   className="w-10 shrink-0"
                   onBlur={(event) => onAction(updateGroup(group.id, { color: event.target.value }))}
                 />
-                <Button variant="ghost" size="icon-sm" aria-label="Move up" onClick={() => onAction(moveGroup(group.id, -1))}>
-                  <ChevronLeft className="size-4 rotate-90" />
-                </Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Move down" onClick={() => onAction(moveGroup(group.id, 1))}>
-                  <ChevronRight className="size-4 rotate-90" />
-                </Button>
                 <Button variant="ghost" size="icon-sm" aria-label="Delete group" onClick={() => onAction(deleteGroup(group.id))}>
                   <Trash2 className="size-4" />
                 </Button>

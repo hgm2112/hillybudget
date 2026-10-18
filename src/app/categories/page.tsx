@@ -25,7 +25,7 @@ export default async function CategoriesPage({
   ] = await Promise.all([
     supabase
       .from("categories")
-      .select("id, name, color, kind, sort_order, archived, excluded, group_id, ideal_override, icon")
+      .select("id, name, color, kind, sort_order, archived, excluded, no_ideal, group_id, ideal_override, icon")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase
@@ -64,14 +64,14 @@ export default async function CategoriesPage({
         p_category_id: category.id,
         p_current_month: month,
         p_window: idealWindow,
-        p_override: category.ideal_override,
+        p_override: category.no_ideal ? null : category.ideal_override,
       })
     )
   );
 
   const idealByCategory: Record<string, number> = {};
   expenseCategories.forEach((category, index) => {
-    idealByCategory[category.id] = Number(idealResults[index]?.data ?? 0);
+    idealByCategory[category.id] = category.no_ideal ? 0 : Number(idealResults[index]?.data ?? 0);
   });
 
   const recurringByCategory: Record<string, { id: string; amount: number; card_id: string | null }> = {};

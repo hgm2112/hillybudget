@@ -147,9 +147,9 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 
 ### Categories recurring controls (implemented)
 
-- `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`), plus the `⋯` menu (edit / move group / move / exclude / archive / delete). Group headers show `spent / budget`.
-- Right column: **Spending trend** bar chart with a `3M/6M/12M/YTD` selector (reuses the dashboard `PERIODS` pattern), **Key metrics**, and a **category detail panel** for the selected category — header (icon, name, group name, group-color circle), `Spending | Ideal | Difference` stats, **Details** (name + group), **Recurring expense** switch (monthly amount + card picker), **Monthly budget (optional)** switch (sets/clears `ideal_override` = trailing-average budget), and footer **View all transactions** (+ `Delete`).
-- `CategoryDetail` uses uncontrolled inputs keyed by value (no setState-in-effect), committing on blur via `setCategoryRecurring` / `updateCategory`.
+- `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`). Group headers show `spent / budget`.
+- Right column: **Spending trend** bar chart with a `3M/6M/12M/YTD` selector (reuses the dashboard `PERIODS` pattern), **Key metrics**, and a **category detail panel** for the selected category — header (icon, name, group name, group-color circle), `Spending | Ideal | Difference` stats, **Details** (name, group, type, color, icon), **Excluded from budget** switch, **Recurring expense** switch (monthly amount + card picker), **Monthly budget (optional)** switch (sets/clears `ideal_override` = trailing-average budget), and footer **View all transactions** + **Archive** + **Delete**.
+- `CategoryDetail` uses uncontrolled inputs keyed by value (no setState-in-effect), committing on blur via `setCategoryRecurring` / `updateCategory`; the inline **Type** select and **Icon** picker commit on change.
 - Removed the top-left donut/summary card and the "All regular categories" card (per the approved mockup); kept the Excluded categories card and the Manage dialog.
 - Header is a 3-zone grid (title + month / `MonthNav` centered / New category · New group · Manage). `page.tsx` defaults the selected month to the **latest recorded month** (max `monthly_category_totals` month) and builds `months` with `monthRange`.
 - New action `setCategoryRecurring(categoryId, { enabled?, amount?, card_id? })` in `categories/actions.ts`: reuses/inserts the category's active `recurring_items` row (`start_month` = current real month, `note`/`end_month` null), soft-off via `active=false`, validates amount ≥ 0 and card ownership. No schema/RLS change.
@@ -157,10 +157,28 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `/expenses` now accepts `?category=<id>` (`page.tsx` → `focusCategory`) which pre-expands and scrolls that category into view; used by "View all transactions".
 - New `src/components/ui/switch.tsx` (base-ui Switch). `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Categories row menu removed → inline detail + drag reorder (implemented)
+
+- Removed the per-row `⋯` menu on `/categories`. Its actions now live in the detail panel: **Move to group** = the inline **Group** select; **Edit** (Type/Color/Icon) = inline **Type** select, **Color** swatches + custom picker, and **Icon** search/grid/`Auto` (reusing the `CATEGORY_ICON_NAMES` registry); **Exclude from budget** = an **Excluded from budget** switch; **Archive** = an **Archive** button in the footer; **Delete** unchanged. `CategoryDialog` is now a create-only form (**New category**: name/type/color/icon; the group/budget fields were dropped as they were ignored on create).
+- Replaced Move up/down with **drag-to-reorder** (native HTML5 DnD, desktop-only, no new dependency). Category rows reorder **within their own group**; group headers reorder the groups. A `GripVertical` handle appears on row/group hover (`opacity-0 group-hover:opacity-100`); the dragged item dims and the drop target gets a primary ring. Cross-group drops are ignored (move groups via the panel's Group select).
+- New actions in `categories/actions.ts`: `reorderCategories(orderedIds)` and `reorderGroups(orderedIds)` — validate household ownership, assign `sort_order = index`, `revalidatePath("/categories")`. Removed the now-unused `moveCategory` and `moveGroup`.
+- `ManageDialog` lost its group **Move up/down** arrow buttons (drag on the main list replaces them).
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Per-category "no ideal" (implemented, migration applied)
+
+- `supabase/migrations/0009_category_no_ideal.sql` **is applied** — adds `categories.no_ideal boolean not null default false` (no RLS/grant/Realtime changes).
+- **Ideal** = the auto trailing-average from `ideal_category_amount` (window set in Manage → "Ideal spending window"); the previous "Monthly budget (optional)" switch was really a **manual override** of it, so it is now labelled **Custom ideal**.
+- The detail panel's controls are a compact toggle row — `Recurring expense [◦] │ Custom ideal [◦] │ Ideal [◦]` — each expanding its content beneath the row (Recurring → amount + card; Custom ideal → amount input). The three are parallel toggles.
+- `Ideal` toggle (default on) is the **no-ideal** control: turning it off sets `no_ideal = true` and clears any custom amount (`ideal_override = null`); turning it on restores the auto/ideal. Turning **Custom ideal** on forces `no_ideal = false`. When no-ideal, the Custom ideal toggle is disabled and the amount input is hidden.
+- No-ideal behaviour: the Ideal **column** on the row renders blank; in the panel the **Ideal** and **Difference** stats show `—` (Difference no longer implied); the category still appears in Regular categories and its spending still counts. Group ideal totals are unaffected (forced ideal = 0). `/expenses` already hides the ideal label at 0, so no client change there.
+- `categories/page.tsx` and `expenses/page.tsx` select `no_ideal` and force `ideal = 0` (and `p_override = null`) for no-ideal categories; `updateCategory` accepts `no_ideal`.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
-- Migrations `0001`–`0008` are applied to the live project (`supabase migration list`: local = remote).
+- Migrations `0001`–`0009` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 
@@ -171,4 +189,4 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 ## Next action
 
 - Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
-- Optionally clean up the untracked root SVG duplicates and add the `⋯ → Edit → Icon` picker to any other surfaces that show category icons.
+- Optionally clean up the untracked root SVG duplicates and add the inline Icon picker to any other surfaces that show category icons.
