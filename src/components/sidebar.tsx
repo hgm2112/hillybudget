@@ -11,7 +11,6 @@ import {
   Menu,
   Moon,
   Receipt,
-  Repeat,
   Search,
   Settings,
   Sun,
@@ -34,7 +33,6 @@ const NAV = [
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/accounts", label: "Accounts", icon: Wallet },
   { href: "/categories", label: "Categories", icon: Tags },
-  { href: "/recurring", label: "Recurring", icon: Repeat },
 ];
 
 export function Sidebar({

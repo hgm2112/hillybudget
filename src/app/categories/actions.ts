@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/session";
+import { toMonthKey } from "@/lib/month";
 import { CATEGORY_ICON_NAMES } from "@/lib/category-icons";
 
 export type ActionResult = { error?: string };
@@ -19,6 +20,7 @@ type CategoryPatch = Partial<{
   ideal_override: number | null;
   icon: string | null;
 }>;
+type RecurringPatch = Partial<{ enabled: boolean; amount: number; card_id: string | null }>;
 type CardPatch = Partial<{ name: string; color: string; archived: boolean }>;
 type GroupPatch = Partial<{ name: string; color: string }>;
 
@@ -312,4 +314,67 @@ export async function setCategoryGroup(id: string, groupId: string | null): Prom
 
 export async function setExcluded(id: string, excluded: boolean): Promise<ActionResult> {
   return updateCategory(id, { excluded });
+}
+
+export async function setCategoryRecurring(categoryId: string, patch: RecurringPatch): Promise<ActionResult> {
+  if (!categoryId) return { error: "Category is required." };
+  if (patch.amount !== undefined && (!Number.isFinite(patch.amount) || patch.amount < 0)) {
+    return { error: "Amount must be a non-negative number." };
+  }
+
+  const { supabase, householdId } = await context();
+
+  const { data: category } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("id", categoryId)
+    .eq("household_id", householdId)
+    .maybeSingle();
+  if (!category) return { error: "Category not found." };
+
+  if (patch.card_id) {
+    const { data: card } = await supabase
+      .from("cards")
+      .select("id")
+      .eq("id", patch.card_id)
+      .eq("household_id", householdId)
+      .maybeSingle();
+    if (!card) return { error: "Payment method not found." };
+  }
+
+  const { data: existing } = await supabase
+    .from("recurring_items")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("category_id", categoryId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const update: Record<string, unknown> = {};
+  if (patch.amount !== undefined) update.amount = Math.round(patch.amount * 100) / 100;
+  if (patch.card_id !== undefined) update.card_id = patch.card_id;
+  if (patch.enabled !== undefined) update.active = patch.enabled;
+
+  if (existing) {
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase.from("recurring_items").update(update).eq("id", existing.id);
+      if (error) return { error: error.message };
+    }
+  } else if (patch.enabled !== false) {
+    const { error } = await supabase.from("recurring_items").insert({
+      household_id: householdId,
+      category_id: categoryId,
+      amount: patch.amount !== undefined ? Math.round(patch.amount * 100) / 100 : 0,
+      card_id: patch.card_id ?? null,
+      note: null,
+      start_month: toMonthKey(new Date()),
+      end_month: null,
+      active: patch.enabled ?? true,
+    });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/categories");
+  return {};
 }

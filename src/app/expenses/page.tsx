@@ -5,11 +5,12 @@ import { ExpensesClient } from "./expenses-client";
 
 const MONTH_RE = /^\d{4}-\d{2}-01$/;
 
-export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string; category?: string }> }) {
   const { household_id } = await requireHousehold();
   const params = await searchParams;
   const currentMonth = toMonthKey(new Date());
   const month = MONTH_RE.test(params.month ?? "") ? (params.month as string) : currentMonth;
+  const focusCategory = params.category ?? null;
 
   const supabase = await createClient();
   const [
@@ -78,6 +79,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         cards={cards ?? []}
         idealByCategory={idealByCategory}
         months={months}
+        focusCategory={focusCategory}
         entries={(entries ?? []).map((entry) => ({ ...entry, amount: Number(entry.amount) }))}
       />
     </main>

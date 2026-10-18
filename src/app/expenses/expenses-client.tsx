@@ -61,6 +61,7 @@ export function ExpensesClient({
   entries,
   idealByCategory,
   months,
+  focusCategory,
 }: {
   householdId: string;
   month: string;
@@ -69,12 +70,13 @@ export function ExpensesClient({
   entries: Entry[];
   idealByCategory: Record<string, number>;
   months: string[];
+  focusCategory?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [viewMode, setViewMode] = useState<"category" | "card">("category");
   const [cardFilter, setCardFilter] = useState("all");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(focusCategory ? [focusCategory] : []));
   const [quick, setQuick] = useState<Record<string, QuickDraft>>({});
   const [newIncome, setNewIncome] = useState({ categoryId: "", amount: "" });
   const [editing, setEditing] = useState<EditTarget | null>(null);
@@ -94,6 +96,14 @@ export function ExpensesClient({
       supabase.removeChannel(channel);
     };
   }, [householdId, month, router]);
+
+  useEffect(() => {
+    if (!focusCategory) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`category-${focusCategory}`)?.scrollIntoView({ block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusCategory]);
 
   const activeCategories = useMemo(() => categories.filter((category) => !category.archived), [categories]);
   const activeCards = useMemo(() => cards.filter((card) => !card.archived), [cards]);
@@ -340,7 +350,7 @@ export function ExpensesClient({
             }
 
             return (
-              <div key={category.id} className="rounded-xl bg-card ring-1 ring-foreground/10">
+              <div key={category.id} id={`category-${category.id}`} className="rounded-xl bg-card ring-1 ring-foreground/10">
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 px-3 py-2 text-left"

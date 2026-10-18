@@ -37,7 +37,7 @@ A clean application rebuild on a from-scratch, `ledger_entries`-based schema. Th
 
 - The old root ledger moved to **`/expenses`** (`src/app/expenses/{page,expenses-client,actions}.tsx`; component `ExpensesClient`; `revalidatePath("/expenses")`; month nav `?month=`). Root `/` now redirects to `/dashboard`.
 - New **`/dashboard`** (`src/app/dashboard/{page,dashboard-client}.tsx`): eyebrow-free `PageHeader` with a 3M/6M/12M/YTD selector, four range-based summary cards (income, expenses, net cash flow, net worth), and a 2×2 Recharts grid (spending trend area, income-vs-expenses bars, spending-by-category horizontal bars, net worth line). Data: `categories`, `monthly_category_totals`, `accounts`, `account_balances`. Net worth = latest snapshot per account (assets = liquid+retirement, liabilities = loan); the net-worth line plots **recorded months only** (no forward-fill). No Realtime. No migration needed.
-- Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Recurring, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
+- Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
 
 ### Excel import (done)
 
@@ -144,6 +144,18 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `categories/page.tsx` selects `icon`; `Category` type has `icon: string | null`.
 - `CategoryDialog` (used by both New and Edit via `⋯ → Edit`) has an **Icon** section: search box, wrapped icon grid, and an **Auto** button to clear the override. Server actions (`addCategory`/`updateCategory`) validate the icon name against the registry.
 - Icons render in the grouped list, the flat "All regular categories" list, and the excluded list. PR #17, `5842fa3`.
+
+### Categories recurring controls (implemented)
+
+- `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`), plus the `⋯` menu (edit / move group / move / exclude / archive / delete). Group headers show `spent / budget`.
+- Right column: **Spending trend** bar chart with a `3M/6M/12M/YTD` selector (reuses the dashboard `PERIODS` pattern), **Key metrics**, and a **category detail panel** for the selected category — header (icon, name, group name, group-color circle), `Spending | Ideal | Difference` stats, **Details** (name + group), **Recurring expense** switch (monthly amount + card picker), **Monthly budget (optional)** switch (sets/clears `ideal_override` = trailing-average budget), and footer **View all transactions** (+ `Delete`).
+- `CategoryDetail` uses uncontrolled inputs keyed by value (no setState-in-effect), committing on blur via `setCategoryRecurring` / `updateCategory`.
+- Removed the top-left donut/summary card and the "All regular categories" card (per the approved mockup); kept the Excluded categories card and the Manage dialog.
+- Header is a 3-zone grid (title + month / `MonthNav` centered / New category · New group · Manage). `page.tsx` defaults the selected month to the **latest recorded month** (max `monthly_category_totals` month) and builds `months` with `monthRange`.
+- New action `setCategoryRecurring(categoryId, { enabled?, amount?, card_id? })` in `categories/actions.ts`: reuses/inserts the category's active `recurring_items` row (`start_month` = current real month, `note`/`end_month` null), soft-off via `active=false`, validates amount ≥ 0 and card ownership. No schema/RLS change.
+- Removed the standalone `/recurring` page (`src/app/recurring/*`) and its sidebar nav item; recurring is managed on `/categories`.
+- `/expenses` now accepts `?category=<id>` (`page.tsx` → `focusCategory`) which pre-expands and scrolls that category into view; used by "View all transactions".
+- New `src/components/ui/switch.tsx` (base-ui Switch). `npm run lint` + `npm run build` pass. No runtime smoke test.
 
 ## Checks
 

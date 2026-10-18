@@ -2,8 +2,22 @@
 
 import { createElement, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ChevronLeft, ChevronRight, Eye, EyeOff, MoreHorizontal, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  ListChecks,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Repeat,
+  Settings2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "cn";
 import { money } from "@/lib/money";
 import { monthLabel, shiftMonth } from "@/lib/month";
@@ -13,7 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/page-header";
+import { Switch } from "@/components/ui/switch";
+import { MonthNav } from "@/components/month-nav";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +57,7 @@ import {
   moveGroup,
   saveIdealWindow,
   setCategoryGroup,
+  setCategoryRecurring,
   setExcluded,
   updateCard,
   updateCategory,
@@ -66,8 +82,17 @@ type Category = {
 type Group = { id: string; name: string; color: string; sort_order: number };
 type CardItem = { id: string; name: string; color: string; sort_order: number; archived: boolean };
 type Total = { category_id: string; month: string; total: number };
+type Recurring = { id: string; amount: number; card_id: string | null };
 
 const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a", "#a15c1e"];
+
+const PERIODS = [
+  { key: "3M", months: 3 },
+  { key: "6M", months: 6 },
+  { key: "12M", months: 12 },
+  { key: "YTD", months: 0 },
+] as const;
+type Period = (typeof PERIODS)[number]["key"];
 
 function shortMonth(key: string) {
   return new Date(key + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
@@ -75,22 +100,28 @@ function shortMonth(key: string) {
 
 export function CategoriesClient({
   month,
+  months,
   idealWindow,
   categories,
   groups,
   cards,
   totals,
+  recurring,
 }: {
   month: string;
+  months: string[];
   idealWindow: string;
   categories: Category[];
   groups: Group[];
   cards: CardItem[];
   totals: Total[];
+  recurring: Record<string, Recurring>;
 }) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>("12M");
   const [categoryDialog, setCategoryDialog] = useState<{ editing: Category | null } | null>(null);
   const [groupDialog, setGroupDialog] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
@@ -127,11 +158,6 @@ export function CategoriesClient({
   }, [totals, month]);
 
   const spentOf = (id: string) => spentByCategory.get(id) ?? 0;
-  const spentRegular = useMemo(
-    () => regular.reduce((sum, category) => sum + (spentByCategory.get(category.id) ?? 0), 0),
-    [regular, spentByCategory]
-  );
-  const budgetRegular = useMemo(() => regular.reduce((sum, category) => sum + category.ideal, 0), [regular]);
 
   const groupsWithCategories = useMemo(() => {
     const known = new Set(groups.map((group) => group.id));
@@ -146,25 +172,28 @@ export function CategoriesClient({
     return list.filter((entry) => entry.categories.length > 0);
   }, [groups, regular]);
 
-  const pieData = useMemo(() => {
-    const rows = regular
-      .map((category) => ({ name: category.name, value: spentByCategory.get(category.id) ?? 0, color: category.color }))
-      .filter((row) => row.value > 0)
-      .sort((a, b) => b.value - a.value);
-    if (rows.length <= 6) return rows;
-    const rest = rows.slice(6).reduce((sum, row) => sum + row.value, 0);
-    return [...rows.slice(0, 6), { name: "Other", value: rest, color: "#6b7280" }];
-  }, [regular, spentByCategory]);
-
   const regularIds = useMemo(() => new Set(regular.map((category) => category.id)), [regular]);
 
   const chartData = useMemo(() => {
-    const months = [...new Set(totals.map((row) => row.month))].filter((m) => m <= month).sort().slice(-12);
-    return months.map((m) => ({
+    const periodMonths =
+      period === "YTD"
+        ? (() => {
+            const list: string[] = [];
+            let cursor = `${month.slice(0, 4)}-01-01`;
+            while (cursor <= month) {
+              list.push(cursor);
+              cursor = shiftMonth(cursor, 1);
+            }
+            return list;
+          })()
+        : Array.from({ length: PERIODS.find((entry) => entry.key === period)?.months ?? 12 }, (_, index) =>
+            shiftMonth(month, index - ((PERIODS.find((entry) => entry.key === period)?.months ?? 12) - 1))
+          );
+    return periodMonths.map((m) => ({
       month: shortMonth(m),
       total: totals.filter((row) => row.month === m && regularIds.has(row.category_id)).reduce((sum, row) => sum + row.total, 0),
     }));
-  }, [totals, month, regularIds]);
+  }, [totals, month, period, regularIds]);
 
   const keyMetrics = useMemo(() => {
     const years = [...new Set(totals.map((row) => row.month.slice(0, 4)))].sort().reverse().slice(0, 3);
@@ -176,127 +205,113 @@ export function CategoriesClient({
     });
   }, [totals, regularIds]);
 
-  const listCategories = useMemo(
-    () =>
-      regular
-        .map((category) => ({ category, spent: spentByCategory.get(category.id) ?? 0 }))
-        .sort((a, b) => b.spent - a.spent),
-    [regular, spentByCategory]
-  );
+  const selected = useMemo(() => {
+    if (selectedId) {
+      const found = categories.find((category) => category.id === selectedId);
+      if (found) return found;
+    }
+    return regular[0] ?? null;
+  }, [selectedId, categories, regular]);
+
+  const selectedGroup = selected ? groups.find((group) => group.id === selected.group_id) ?? null : null;
+
+  function toggleRecurring(category: Category, enabled: boolean) {
+    if (enabled) setSelectedId(category.id);
+    run(setCategoryRecurring(category.id, { enabled }));
+  }
 
   return (
     <>
-      <PageHeader title="Categories" description={monthLabel(month)}>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon-sm" aria-label="Previous month" onClick={() => router.push(`/categories?month=${shiftMonth(month, -1)}`)}>
-            <ChevronLeft className="size-4" />
+      <div className="relative grid grid-cols-1 items-center gap-3 p-4 md:p-8 md:pb-0 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h1 className="text-2xl font-semibold">Categories</h1>
+          <p className="text-sm text-muted-foreground">{monthLabel(month)}</p>
+          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
+        </div>
+        <div className="flex justify-center">
+          <MonthNav value={month} months={months} onSelect={(value) => router.push(`/categories?month=${value}`)} />
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Button size="sm" onClick={() => setCategoryDialog({ editing: null })}>
+            <Plus className="size-4" /> New category
           </Button>
-          <Button variant="outline" size="icon-sm" aria-label="Next month" onClick={() => router.push(`/categories?month=${shiftMonth(month, 1)}`)}>
-            <ChevronRight className="size-4" />
+          <Button size="sm" variant="outline" onClick={() => setGroupDialog(true)}>
+            <Plus className="size-4" /> New group
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setManageOpen(true)}>
+            <Settings2 className="size-4" /> Manage
           </Button>
         </div>
-        <Button size="sm" onClick={() => setCategoryDialog({ editing: null })}>
-          <Plus className="size-4" /> New category
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setGroupDialog(true)}>
-          <Plus className="size-4" /> New group
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setManageOpen(true)}>
-          <Settings2 className="size-4" /> Manage
-        </Button>
-      </PageHeader>
+      </div>
 
-      <div className="grid gap-4 p-4 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="p-4 md:p-8">
+        {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
-          <Card>
-            <CardContent className="space-y-4 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Spent in {monthLabel(month)}</p>
-                  <p className="text-2xl font-semibold tabular-nums">{money(spentRegular)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total budget</p>
-                  <p className="text-lg font-medium tabular-nums">{money(budgetRegular)}</p>
-                </div>
-              </div>
-
-              <div className="h-40">
-                {pieData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="100%" paddingAngle={2} strokeWidth={0}>
-                        {pieData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => money(Number(value))} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="grid h-full place-items-center text-sm text-muted-foreground">No spending this month.</div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between border-t pt-3 text-sm">
-                <span className="text-muted-foreground">Left to spend</span>
-                <span className={cn("font-medium tabular-nums", budgetRegular - spentRegular < 0 && "text-destructive")}>
-                  {money(budgetRegular - spentRegular)}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-4 p-4">
-              <h2 className="text-sm font-semibold">Regular categories</h2>
-              {groupsWithCategories.length === 0 && <p className="text-sm text-muted-foreground">No expense categories yet.</p>}
-              {groupsWithCategories.map(({ group, categories: groupCategories }) => {
-                const groupBudget = groupCategories.reduce((sum, category) => sum + category.ideal, 0);
-                const groupSpent = groupCategories.reduce((sum, category) => sum + spentOf(category.id), 0);
-                return (
-                  <div key={group.id || "ungrouped"} className="space-y-1">
-                    <div
-                      className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
-                      style={{ "--group-color": group.color } as React.CSSProperties}
-                    >
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                      <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
-                      <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
-                      <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
-                        <span className="w-16 text-right text-muted-foreground">{money(groupBudget)}</span>
-                        <span className="w-16 text-right text-sm font-bold">{money(groupSpent)}</span>
-                        <span className="w-6" aria-hidden />
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {groupCategories.map((category) => (
-                        <CategoryRow
-                          key={category.id}
-                          category={category}
-                          spent={spentOf(category.id)}
-                          groups={groups}
-                          onAction={run}
-                          onEdit={() => setCategoryDialog({ editing: category })}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          {excluded.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,36rem)_minmax(0,1fr)]">
+          <div className="space-y-4">
             <Card>
-              <CardContent className="space-y-2 p-4">
-                <h2 className="text-sm font-semibold">Excluded categories</h2>
-                <p className="text-xs text-muted-foreground">Not counted toward the budget total.</p>
-                <div className="space-y-0.5">
-                  {excluded.map((category) => {
-                    return (
+              <CardContent className="space-y-1 p-4">
+                <div
+                  className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
+                  style={{ "--group-color": "#d85700" } as React.CSSProperties}
+                >
+                  <span className="min-w-0 truncate text-base font-bold">Regular categories</span>
+                  <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs">
+                    <span className="w-20 text-right text-muted-foreground">Spending</span>
+                    <span className="w-20 text-right text-muted-foreground">Ideal</span>
+                    <span className="w-6" aria-hidden />
+                  </span>
+                </div>
+                {groupsWithCategories.length === 0 && (
+                  <p className="pt-2 text-sm text-muted-foreground">No expense categories yet.</p>
+                )}
+                {groupsWithCategories.map(({ group, categories: groupCategories }) => {
+                  const groupBudget = groupCategories.reduce((sum, category) => sum + category.ideal, 0);
+                  const groupSpent = groupCategories.reduce((sum, category) => sum + spentOf(category.id), 0);
+                  return (
+                    <div key={group.id || "ungrouped"} className="space-y-1 pt-1">
+                      <div
+                        className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
+                        style={{ "--group-color": group.color } as React.CSSProperties}
+                      >
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                        <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
+                        <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
+                        <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
+                          <span className="w-20 text-right">{money(groupSpent)}</span>
+                          <span className="w-20 text-right text-muted-foreground">{money(groupBudget)}</span>
+                          <span className="w-6" aria-hidden />
+                        </span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {groupCategories.map((category) => (
+                          <CategoryRow
+                            key={category.id}
+                            category={category}
+                            spent={spentOf(category.id)}
+                            selected={selected?.id === category.id}
+                            recurringOn={Boolean(recurring[category.id])}
+                            onSelect={() => setSelectedId(category.id)}
+                            onToggleRecurring={(enabled) => toggleRecurring(category, enabled)}
+                            onEdit={() => setCategoryDialog({ editing: category })}
+                            groups={groups}
+                            onAction={run}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {excluded.length > 0 && (
+              <Card>
+                <CardContent className="space-y-2 p-4">
+                  <h2 className="text-sm font-semibold">Excluded categories</h2>
+                  <p className="text-xs text-muted-foreground">Not counted toward the budget total.</p>
+                  <div className="space-y-0.5">
+                    {excluded.map((category) => (
                       <div key={category.id} className="flex items-center gap-2 rounded-md px-1 py-1 text-sm">
                         {createElement(categoryIcon(category), { className: "size-4 text-muted-foreground" })}
                         <span className="min-w-0 flex-1 truncate">{category.name}</span>
@@ -305,96 +320,83 @@ export function CategoriesClient({
                           <Eye className="size-4" />
                         </Button>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">Spending trend</h2>
+                  <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
+                    {PERIODS.map((entry) => (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => setPeriod(entry.key)}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs transition-colors",
+                          period === entry.key
+                            ? "bg-background font-medium text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {entry.key}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} />
+                      <YAxis tickLine={false} axisLine={false} fontSize={12} width={48} />
+                      <Tooltip formatter={(value) => money(Number(value))} cursor={{ fill: "transparent" }} />
+                      <Bar dataKey="total" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
 
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold">All regular categories</h2>
-                <Badge variant="secondary">{regular.length}</Badge>
-              </div>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Spent</p>
-                  <p className="text-lg font-medium tabular-nums">{money(spentRegular)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Budget</p>
-                  <p className="text-lg font-medium tabular-nums">{money(budgetRegular)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Left</p>
-                  <p className={cn("text-lg font-medium tabular-nums", budgetRegular - spentRegular < 0 && "text-destructive")}>
-                    {money(budgetRegular - spentRegular)}
-                  </p>
-                </div>
-              </div>
-              <div className="h-2 overflow-hidden rounded bg-muted">
-                <div
-                  className={cn("h-full", budgetRegular - spentRegular < 0 ? "bg-destructive" : "bg-emerald-500")}
-                  style={{ width: `${budgetRegular > 0 ? Math.min(100, (spentRegular / budgetRegular) * 100) : spentRegular > 0 ? 100 : 0}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <h2 className="text-sm font-semibold">Monthly spending</h2>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} />
-                    <YAxis tickLine={false} axisLine={false} fontSize={12} width={48} />
-                    <Tooltip formatter={(value) => money(Number(value))} />
-                    <Bar dataKey="total" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <h2 className="text-sm font-semibold">Key metrics</h2>
-              <div className="space-y-2">
-                {keyMetrics.map((metric) => (
-                  <div key={metric.year} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Spent in {metric.year}</span>
-                    <span className="tabular-nums font-medium">{money(metric.total)}</span>
-                    <span className="tabular-nums text-muted-foreground">avg {money(metric.avg)}/mo</span>
-                  </div>
-                ))}
-                {keyMetrics.length === 0 && <p className="text-sm text-muted-foreground">No history yet.</p>}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-1 p-4">
-              <h2 className="pb-2 text-sm font-semibold">Regular categories</h2>
-              <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
-                {listCategories.map(({ category, spent }) => {
-                  return (
-                    <div key={category.id} className="grid grid-cols-[1.25rem_1fr_auto_auto] items-center gap-2 rounded px-1 py-0.5 text-sm">
-                      {createElement(categoryIcon(category), { className: "size-4 text-muted-foreground" })}
-                      <span className="truncate">{category.name}</span>
-                      <span className="tabular-nums">{money(spent)}</span>
-                      <span className="tabular-nums text-muted-foreground">{money(category.ideal)}</span>
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <h2 className="text-sm font-semibold">Key metrics</h2>
+                <div className="space-y-2">
+                  {keyMetrics.map((metric) => (
+                    <div key={metric.year} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Spent in {metric.year}</span>
+                      <span className="tabular-nums font-medium">{money(metric.total)}</span>
+                      <span className="tabular-nums text-muted-foreground">avg {money(metric.avg)}/mo</span>
                     </div>
-                  );
-                })}
-                {listCategories.length === 0 && <p className="text-sm text-muted-foreground">Nothing to show.</p>}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                  {keyMetrics.length === 0 && <p className="text-sm text-muted-foreground">No history yet.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            {selected ? (
+              <CategoryDetail
+                key={selected.id}
+                category={selected}
+                group={selectedGroup}
+                groups={groups}
+                recurring={recurring[selected.id]}
+                cards={cards.filter((card) => !card.archived)}
+                spent={spentOf(selected.id)}
+                onAction={run}
+                onViewAll={() => router.push(`/expenses?month=${month}&category=${selected.id}`)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-4 text-sm text-muted-foreground">Select a category to edit it.</CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
 
@@ -417,17 +419,13 @@ export function CategoriesClient({
                 })
               );
             }
-            const ok = await run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color, icon: payload.icon }));
-            return ok;
+            return run(addCategory({ name: payload.name, kind: payload.kind, color: payload.color, icon: payload.icon }));
           }}
         />
       )}
 
       {groupDialog && (
-        <GroupDialog
-          onClose={() => setGroupDialog(false)}
-          onSave={(payload) => run(addGroup(payload))}
-        />
+        <GroupDialog onClose={() => setGroupDialog(false)} onSave={(payload) => run(addGroup(payload))} />
       )}
 
       {manageOpen && (
@@ -448,26 +446,73 @@ export function CategoriesClient({
 function CategoryRow({
   category,
   spent,
+  selected,
+  recurringOn,
+  onSelect,
+  onToggleRecurring,
+  onEdit,
   groups,
   onAction,
-  onEdit,
 }: {
   category: Category;
   spent: number;
+  selected: boolean;
+  recurringOn: boolean;
+  onSelect: () => void;
+  onToggleRecurring: (enabled: boolean) => void;
+  onEdit: () => void;
   groups: Group[];
   onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
-  onEdit: () => void;
 }) {
   return (
-    <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
-      {createElement(categoryIcon(category), { className: "size-4 shrink-0 text-muted-foreground" })}
-      <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
-      <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
-      <span className="w-16 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
-      <DropdownMenu>
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      className={cn(
+        "group flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50",
+        selected && "bg-primary/10"
+      )}
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        {createElement(categoryIcon(category), { className: "size-4 shrink-0 text-muted-foreground" })}
+        <span className="min-w-0 truncate text-sm">{category.name}</span>
+        <button
+          type="button"
+          aria-label={recurringOn ? `Disable recurring for ${category.name}` : `Enable recurring for ${category.name}`}
+          aria-pressed={recurringOn}
+          title={recurringOn ? "Recurring on" : "Recurring off"}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleRecurring(!recurringOn);
+          }}
+          className={cn(
+            "shrink-0 rounded p-0.5 transition-colors",
+            recurringOn ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground"
+          )}
+        >
+          <Repeat className="size-4" />
+        </button>
+      </span>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
+      <span onClick={(event) => event.stopPropagation()}>
+        <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" size="icon-xs" aria-label={`Options for ${category.name}`} className="opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100" />
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Options for ${category.name}`}
+              className="opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100"
+            />
           }
         >
           <MoreHorizontal className="size-4" />
@@ -501,8 +546,229 @@ function CategoryRow({
             <Trash2 className="size-4" /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenu>
+      </span>
     </div>
+  );
+}
+
+function CategoryDetail({
+  category,
+  group,
+  groups,
+  recurring,
+  cards,
+  spent,
+  onAction,
+  onViewAll,
+}: {
+  category: Category;
+  group: Group | null;
+  groups: Group[];
+  recurring: Recurring | undefined;
+  cards: CardItem[];
+  spent: number;
+  onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
+  onViewAll: () => void;
+}) {
+  const recurringOn = Boolean(recurring);
+  const budgetOn = category.ideal_override != null;
+  const effectiveBudget = category.ideal_override ?? category.ideal;
+  const budgetDisplay = category.ideal_override != null ? category.ideal_override : Math.round(category.ideal);
+  const difference = spent - category.ideal;
+  const groupColor = group?.color ?? "#6b7280";
+
+  function commitName(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === category.name) return;
+    onAction(updateCategory(category.id, { name: trimmed }));
+  }
+
+  function commitAmount(value: string) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    if (amount === recurring?.amount) return;
+    onAction(setCategoryRecurring(category.id, { amount }));
+  }
+
+  function commitBudget(value: string) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    if (amount === category.ideal_override) return;
+    onAction(updateCategory(category.id, { ideal_override: amount }));
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="flex items-start gap-3">
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-lg"
+            style={{ backgroundColor: `${category.color}22`, color: category.color }}
+          >
+            {createElement(categoryIcon(category), { className: "size-5" })}
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate font-heading text-lg font-bold">{category.name}</h2>
+            <p className="truncate text-xs text-muted-foreground">{group?.name ?? "Ungrouped"}</p>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+            Regular category
+            <span className="size-3 rounded-full" style={{ backgroundColor: groupColor }} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 border-y py-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">Spending</p>
+            <p className="text-lg font-semibold tabular-nums">{money(spent)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ideal</p>
+            <p className="text-lg font-semibold tabular-nums">{money(category.ideal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Difference</p>
+            <p className={cn("text-lg font-semibold tabular-nums", difference > 0 ? "text-red-600" : "text-green-600")}>
+              {money(difference)}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor={`detail-name-${category.id}`}>Category name</Label>
+              <Input
+                id={`detail-name-${category.id}`}
+                key={category.name}
+                defaultValue={category.name}
+                onBlur={(event) => commitName(event.currentTarget.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`detail-group-${category.id}`}>Group</Label>
+              <select
+                id={`detail-group-${category.id}`}
+                value={category.group_id ?? ""}
+                onChange={(event) => onAction(setCategoryGroup(category.id, event.target.value || null))}
+                className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+              >
+                <option value="">No group</option>
+                {groups.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t pt-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Recurring expense</h3>
+            <Switch
+              checked={recurringOn}
+              onCheckedChange={(checked) => onAction(setCategoryRecurring(category.id, { enabled: checked }))}
+              aria-label="Recurring expense"
+            />
+          </div>
+          {recurringOn && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor={`detail-amount-${category.id}`} className="text-xs text-muted-foreground">
+                  Monthly amount
+                </Label>
+                <div className="relative">
+                  <Input
+                    id={`detail-amount-${category.id}`}
+                    key={recurring ? recurring.amount : "none"}
+                    defaultValue={recurring ? recurring.amount : ""}
+                    onBlur={(event) => commitAmount(event.currentTarget.value)}
+                    inputMode="decimal"
+                    className="pr-8 tabular-nums"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Clear recurring amount"
+                    onClick={() => onAction(setCategoryRecurring(category.id, { amount: 0 }))}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`detail-card-${category.id}`} className="text-xs text-muted-foreground">
+                  Card
+                </Label>
+                <select
+                  id={`detail-card-${category.id}`}
+                  value={recurring?.card_id ?? "none"}
+                  onChange={(event) =>
+                    onAction(setCategoryRecurring(category.id, { card_id: event.target.value === "none" ? null : event.target.value }))
+                  }
+                  className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                >
+                  <option value="none">No card</option>
+                  {cards.map((card) => (
+                    <option key={card.id} value={card.id}>{card.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t pt-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Monthly budget (optional)</h3>
+            <Switch
+              checked={budgetOn}
+              onCheckedChange={(checked) =>
+                onAction(
+                  updateCategory(category.id, {
+                    ideal_override: checked ? Math.round(effectiveBudget * 100) / 100 : null,
+                  })
+                )
+              }
+              aria-label="Monthly budget"
+            />
+          </div>
+          <div className="relative">
+            <Input
+              key={budgetDisplay}
+              defaultValue={budgetDisplay}
+              onBlur={(event) => commitBudget(event.currentTarget.value)}
+              inputMode="decimal"
+              className="pr-8 tabular-nums"
+            />
+            <button
+              type="button"
+              aria-label="Clear budget override"
+              onClick={() => onAction(updateCategory(category.id, { ideal_override: null }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t pt-3">
+          <Button variant="outline" size="sm" onClick={onViewAll}>
+            <ListChecks className="size-4" /> View all transactions
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onAction(deleteCategory(category.id))}
+          >
+            <Trash2 className="size-4" /> Delete
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
