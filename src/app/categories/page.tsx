@@ -15,7 +15,7 @@ export default async function CategoriesPage({
   const month = MONTH_RE.test(params.month ?? "") ? (params.month as string) : toMonthKey(new Date());
 
   const supabase = await createClient();
-  const [{ data: categories }, { data: groups }, { data: settings }, { data: totals }] = await Promise.all([
+  const [{ data: categories }, { data: groups }, { data: cards }, { data: settings }, { data: totals }] = await Promise.all([
     supabase
       .from("categories")
       .select("id, name, color, kind, sort_order, archived, excluded, group_id, ideal_override")
@@ -23,6 +23,11 @@ export default async function CategoriesPage({
       .order("sort_order"),
     supabase
       .from("category_groups")
+      .select("id, name, color, sort_order")
+      .eq("household_id", household_id)
+      .order("sort_order"),
+    supabase
+      .from("cards")
       .select("id, name, color, sort_order")
       .eq("household_id", household_id)
       .order("sort_order"),
@@ -61,6 +66,7 @@ export default async function CategoriesPage({
           ideal: idealByCategory[category.id] ?? 0,
         }))}
         groups={groups ?? []}
+        cards={cards ?? []}
         totals={(totals ?? []).map((total) => ({
           category_id: total.category_id,
           month: total.month,

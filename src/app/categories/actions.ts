@@ -54,7 +54,10 @@ export async function addCategory(input: {
     color: input.color,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: `A category named "${name}" already exists.` };
+    return { error: error.message };
+  }
 
   revalidatePath("/categories");
   return {};
@@ -161,7 +164,10 @@ export async function addCard(input: { name: string; color: string }): Promise<A
     color: input.color,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: `A payment method named "${name}" already exists.` };
+    return { error: error.message };
+  }
 
   revalidatePath("/categories");
   return {};
@@ -241,7 +247,10 @@ export async function addGroup(input: { name: string; color: string }): Promise<
     color: input.color,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: `A group named "${name}" already exists.` };
+    return { error: error.message };
+  }
 
   revalidatePath("/categories");
   return {};

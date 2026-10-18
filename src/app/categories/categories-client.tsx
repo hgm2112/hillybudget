@@ -35,6 +35,7 @@ import {
   addCard,
   addCategory,
   addGroup,
+  deleteCard,
   deleteCategory,
   deleteGroup,
   moveCategory,
@@ -42,6 +43,7 @@ import {
   saveIdealWindow,
   setCategoryGroup,
   setExcluded,
+  updateCard,
   updateCategory,
   updateGroup,
   type ActionResult,
@@ -61,6 +63,7 @@ type Category = {
   ideal: number;
 };
 type Group = { id: string; name: string; color: string; sort_order: number };
+type CardItem = { id: string; name: string; color: string; sort_order: number };
 type Total = { category_id: string; month: string; total: number };
 
 const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a"];
@@ -74,12 +77,14 @@ export function CategoriesClient({
   idealWindow,
   categories,
   groups,
+  cards,
   totals,
 }: {
   month: string;
   idealWindow: string;
   categories: Category[];
   groups: Group[];
+  cards: CardItem[];
   totals: Total[];
 }) {
   const router = useRouter();
@@ -422,7 +427,9 @@ export function CategoriesClient({
         <ManageDialog
           idealWindow={idealWindow}
           groups={groups}
+          cards={cards}
           archived={categories.filter((category) => category.archived)}
+          error={error}
           onAction={run}
           onClose={() => setManageOpen(false)}
         />
@@ -676,13 +683,17 @@ function GroupDialog({
 function ManageDialog({
   idealWindow,
   groups,
+  cards,
   archived,
+  error,
   onAction,
   onClose,
 }: {
   idealWindow: string;
   groups: Group[];
+  cards: CardItem[];
   archived: Category[];
+  error: string | null;
   onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -695,6 +706,8 @@ function ManageDialog({
         <DialogHeader>
           <DialogTitle>Manage categories</DialogTitle>
         </DialogHeader>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="space-y-3">
           <h3 className="text-sm font-semibold">Groups</h3>
@@ -756,7 +769,42 @@ function ManageDialog({
         </div>
 
         <div className="space-y-3 border-t pt-3">
-          <h3 className="text-sm font-semibold">Cards</h3>
+          <h3 className="text-sm font-semibold">Payment methods</h3>
+          <div className="space-y-1">
+            {cards.map((card) => (
+              <div key={card.id} className="flex items-center gap-2">
+                <span className="size-4 rounded-full" style={{ backgroundColor: card.color }} />
+                <Input
+                  defaultValue={card.name}
+                  className="h-8"
+                  onBlur={(event) => {
+                    const input = event.target;
+                    const name = input.value.trim();
+                    if (name && name !== card.name) {
+                      onAction(updateCard(card.id, { name })).then((ok) => {
+                        if (!ok) input.value = card.name;
+                      });
+                    }
+                  }}
+                />
+                <Input
+                  type="color"
+                  defaultValue={card.color}
+                  className="w-10 shrink-0"
+                  onBlur={(event) => onAction(updateCard(card.id, { color: event.target.value }))}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Delete payment method"
+                  onClick={() => onAction(deleteCard(card.id))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            {cards.length === 0 && <p className="text-sm text-muted-foreground">No payment methods yet.</p>}
+          </div>
           <form
             className="flex items-center gap-2"
             onSubmit={async (event) => {
@@ -766,7 +814,7 @@ function ManageDialog({
             }}
           >
             <Input
-              placeholder="New card"
+              placeholder="New payment method"
               value={newCard.name}
               onChange={(event) => setNewCard((state) => ({ ...state, name: event.target.value }))}
             />
