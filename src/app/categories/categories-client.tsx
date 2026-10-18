@@ -205,7 +205,7 @@ export function CategoriesClient({
         </Button>
       </PageHeader>
 
-      <div className="grid gap-4 p-4 md:p-8 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+      <div className="grid gap-4 p-4 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
         <div className="space-y-4">
           {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -259,9 +259,9 @@ export function CategoriesClient({
                   <div key={group.id || "ungrouped"} className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                      <span className="text-sm font-medium">{group.name}</span>
-                      <Badge variant="secondary">{groupCategories.length}</Badge>
-                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                      <span className="min-w-0 truncate text-sm font-medium">{group.name}</span>
+                      <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
+                      <span className="ml-auto shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                         {money(groupSpent)} / {money(groupBudget)}
                       </span>
                     </div>
@@ -451,20 +451,12 @@ function CategoryRow({
   onAction: (promise: Promise<ActionResult>) => Promise<boolean>;
   onEdit: () => void;
 }) {
-  const pct = category.ideal > 0 ? Math.min(100, (spent / category.ideal) * 100) : spent > 0 ? 100 : 0;
-  const over = category.ideal > 0 && spent > category.ideal;
-
   return (
     <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
       {createElement(categoryIcon(category.name), { className: "size-4 shrink-0 text-muted-foreground" })}
       <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
-      <div className="hidden w-20 sm:block">
-        <div className="h-1.5 overflow-hidden rounded bg-muted">
-          <div className="h-full rounded" style={{ width: `${pct}%`, backgroundColor: over ? "var(--destructive)" : category.color }} />
-        </div>
-      </div>
-      <span className="w-16 text-right text-xs tabular-nums">{money(spent)}</span>
-      <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
+      <span className="w-16 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
+      <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{money(category.ideal)}</span>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
