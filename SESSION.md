@@ -135,6 +135,7 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - PR #7, squash-merged as `d1e2355`. `npm run lint` + `npm run build` pass.
 - Group headers now carry a faded tint of the group color: `.group-tint` in `globals.css` uses `color-mix(in oklab, var(--group-color) 30%, transparent)` (45% under `.dark`), with `--group-color` set inline per group. Full-bleed via `-mx-4` (cancels the card's `p-4`), `rounded-none`, `px-5`. PR #9 & #11; final `f0e2eb7`.
 - In the grouped "Regular categories" widget the faded ideal amount now renders left of the actual month amount, in both category rows and the group header. The group header's two `w-16` columns plus a `w-6` spacer match the rows' `⋯` button, so the group numbers align above the category numbers. PR #13, `72d5df0`.
+- Group names are `text-base font-bold` and the group actual total is `text-sm font-bold` (the fonts only ship 400/700 faces, so `font-medium`/`font-semibold` were not real weights). PR #15, `407984b`.
 
 ## Checks
 
