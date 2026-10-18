@@ -257,7 +257,10 @@ export function CategoriesClient({
                 const groupSpent = groupCategories.reduce((sum, category) => sum + spentOf(category.id), 0);
                 return (
                   <div key={group.id || "ungrouped"} className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div
+                      className="group-tint flex items-center gap-2 rounded-md px-2 py-1"
+                      style={{ "--group-color": group.color } as React.CSSProperties}
+                    >
                       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
                       <span className="min-w-0 truncate text-sm font-medium">{group.name}</span>
                       <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
