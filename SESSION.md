@@ -133,6 +133,7 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - The grouped "Regular categories" rows (`categories-client.tsx` `CategoryRow`) truncated names to ~55px because a fixed `w-20` progress bar + two `w-16` amount columns overfilled the `minmax(0,24rem)` left column. Removed the progress bar, added `shrink-0` to the amount columns, and widened the left column to `minmax(0,30rem)`.
 - Group header: group name is `min-w-0 truncate`; the count `Badge` and the `$spent / $budget` total are `shrink-0` (total `whitespace-nowrap`), so the total stays on the same line as the group instead of clipping.
 - PR #7, squash-merged as `d1e2355`. `npm run lint` + `npm run build` pass.
+- Group headers now carry a faded tint of the group color: `.group-tint` in `globals.css` uses `color-mix(in oklab, var(--group-color) 12%, transparent)` (24% under `.dark`), with `--group-color` set inline per group and `rounded-md px-2 py-1` on the header. PR #9, `60fa454`.
 
 ## Checks
 
