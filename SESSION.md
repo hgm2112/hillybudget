@@ -9,9 +9,9 @@ Working state for hillybudget. Keep current at the end of each substantial work 
 - Supabase project (correct): `geajkzgdqflrpefhltwm.supabase.co`. Do not run destructive SQL against other projects.
 - Commands: `npm run dev`, `npm run build`, `npm run lint`.
 
-## Rebuild (approved, in progress)
+## Rebuild (approved; app rebuilt on the live schema)
 
-A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has since been imported (see below).
+A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has been imported (see below). Migrations through `0008` are applied (see Database in `AGENTS.md`).
 
 ### Schema (applied via `supabase/reset_and_init.sql`)
 
@@ -79,7 +79,7 @@ A clean application rebuild on a from-scratch, `ledger_entries`-based schema. Th
 - Logo sizing follow-up: `BrandLogo` no longer bakes in a size. The sidebar logo fills the panel width proportionally (`h-auto w-full`, ~80px tall on desktop) and pushes content below it down; collapse/close buttons are absolutely positioned top-right over the logo's empty top strip. Mobile top bar logo is centered and capped at `max-w-[14rem]`. Collapsed sidebar keeps the `size-6` icon.
 - Recolored hardcoded chart/UI colors: dashboard (income green, expense red, net worth/accent orange; summary card left borders), stats bars (income/expense/net), category/card `PALETTE` → brand set, `Other`/`Ungrouped`/no-card grays → `#6b7280`, expenses no-entries warning → orange tints.
 - PWA: `public/icons/icon.svg` and `src/app/icon.svg` = brand icon on a `#101214` rounded square; `manifest.ts` `theme_color: #d85700`, `background_color: #101214`.
-- Data: `supabase/migrations/0006_brand_colors.sql` **applied** — remaps stored `categories`/`cards` colors to the brand palette (RLS preserved). Result: 31 categories `#6b7280`, plus `#d85700`×2, `#f2a65a`×3, `#9ca3af`×3, `#4b5563`×2, `#8c3b00`×2, `#b8865a`×2; all 10 cards `#6b7280`.
+- Data: `supabase/migrations/0006_brand_colors.sql` **applied** — remaps stored `categories`/`cards` colors to the brand palette (RLS preserved). Result: 31 categories `#6b7280`, plus `#d85700`×2, `#f2a65a`×3, `#9ca3af`×3, `#4b5563`×2, `#8c3b00`×2, `#b8865a`×2; all 10 cards `#6b7280`. (The card colors were later replaced by the per-card unique colors in `0007`.)
 - `npm run lint` + `npm run build` pass.
 
 ### Fonts (implemented)
@@ -148,12 +148,15 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
+- Migrations `0001`–`0008` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 
 - **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
+- Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
 
 ## Next action
 
 - Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
+- Optionally clean up the untracked root SVG duplicates and add the `⋯ → Edit → Icon` picker to any other surfaces that show category icons.
