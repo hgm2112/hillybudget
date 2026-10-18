@@ -128,6 +128,12 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Applied with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`; `supabase migration list` confirms `0007` local = remote. Verified live: the 9 active cards now carry 9 distinct colors (the first 9 `category_groups` colors, reused as requested) and the archived card carries the 10th.
 - `npm run lint` + `npm run build` pass. No runtime smoke test of the new dialog actions.
 
+### Regular categories legibility (implemented)
+
+- The grouped "Regular categories" rows (`categories-client.tsx` `CategoryRow`) truncated names to ~55px because a fixed `w-20` progress bar + two `w-16` amount columns overfilled the `minmax(0,24rem)` left column. Removed the progress bar, added `shrink-0` to the amount columns, and widened the left column to `minmax(0,30rem)`.
+- Group header: group name is `min-w-0 truncate`; the count `Badge` and the `$spent / $budget` total are `shrink-0` (total `whitespace-nowrap`), so the total stays on the same line as the group instead of clipping.
+- PR #7, squash-merged as `d1e2355`. `npm run lint` + `npm run build` pass.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
