@@ -34,7 +34,7 @@ type Category = {
   archived: boolean;
 };
 
-type CardItem = { id: string; name: string; color: string };
+type CardItem = { id: string; name: string; color: string; archived: boolean };
 
 type Entry = {
   id: string;
@@ -96,6 +96,7 @@ export function ExpensesClient({
   }, [householdId, month, router]);
 
   const activeCategories = useMemo(() => categories.filter((category) => !category.archived), [categories]);
+  const activeCards = useMemo(() => cards.filter((card) => !card.archived), [cards]);
   const expenseCategories = useMemo(() => activeCategories.filter((category) => category.kind === "expense"), [activeCategories]);
   const incomeCategories = useMemo(() => activeCategories.filter((category) => category.kind === "income"), [activeCategories]);
 
@@ -177,7 +178,7 @@ export function ExpensesClient({
         className={className ?? "h-8 rounded-md border bg-background px-2 text-sm"}
       >
         <option value="none">No card</option>
-        {cards.map((card) => (
+        {activeCards.map((card) => (
           <option key={card.id} value={card.id}>
             {card.name}
           </option>
@@ -257,7 +258,7 @@ export function ExpensesClient({
             >
               <option value="all">All cards</option>
               <option value="none">No card</option>
-              {cards.map((card) => (
+              {activeCards.map((card) => (
                 <option key={card.id} value={card.id}>{card.name}</option>
               ))}
             </select>

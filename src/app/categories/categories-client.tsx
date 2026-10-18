@@ -63,7 +63,7 @@ type Category = {
   ideal: number;
 };
 type Group = { id: string; name: string; color: string; sort_order: number };
-type CardItem = { id: string; name: string; color: string; sort_order: number };
+type CardItem = { id: string; name: string; color: string; sort_order: number; archived: boolean };
 type Total = { category_id: string; month: string; total: number };
 
 const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a"];
@@ -699,6 +699,9 @@ function ManageDialog({
 }) {
   const [newGroup, setNewGroup] = useState({ name: "", color: PALETTE[3] });
   const [newCard, setNewCard] = useState({ name: "", color: PALETTE[1] });
+  const [confirmCard, setConfirmCard] = useState<string | null>(null);
+  const activeCards = cards.filter((card) => !card.archived);
+  const archivedCards = cards.filter((card) => card.archived);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -771,7 +774,7 @@ function ManageDialog({
         <div className="space-y-3 border-t pt-3">
           <h3 className="text-sm font-semibold">Payment methods</h3>
           <div className="space-y-1">
-            {cards.map((card) => (
+            {activeCards.map((card) => (
               <div key={card.id} className="flex items-center gap-2">
                 <span className="size-4 rounded-full" style={{ backgroundColor: card.color }} />
                 <Input
@@ -793,17 +796,38 @@ function ManageDialog({
                   className="w-10 shrink-0"
                   onBlur={(event) => onAction(updateCard(card.id, { color: event.target.value }))}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Delete payment method"
-                  onClick={() => onAction(deleteCard(card.id))}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+                {confirmCard === card.id ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="destructive" size="sm" onClick={() => onAction(deleteCard(card.id))}>
+                      Delete
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmCard(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Archive payment method"
+                      onClick={() => onAction(updateCard(card.id, { archived: true }))}
+                    >
+                      <Archive className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Delete payment method"
+                      onClick={() => setConfirmCard(card.id)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             ))}
-            {cards.length === 0 && <p className="text-sm text-muted-foreground">No payment methods yet.</p>}
+            {activeCards.length === 0 && <p className="text-sm text-muted-foreground">No payment methods yet.</p>}
           </div>
           <form
             className="flex items-center gap-2"
@@ -828,6 +852,48 @@ function ManageDialog({
               <Plus className="size-4" /> Add
             </Button>
           </form>
+
+          {archivedCards.length > 0 && (
+            <div className="space-y-1 pt-1">
+              <p className="text-xs text-muted-foreground">
+                Archived payment methods stay on past entries but can&apos;t be picked for new ones.
+              </p>
+              {archivedCards.map((card) => (
+                <div key={card.id} className="flex items-center gap-2 text-sm">
+                  <span className="size-4 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
+                  <span className="min-w-0 flex-1 truncate">{card.name}</span>
+                  {confirmCard === card.id ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button variant="destructive" size="sm" onClick={() => onAction(deleteCard(card.id))}>
+                        Delete
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmCard(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onAction(updateCard(card.id, { archived: false }))}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Delete payment method"
+                        onClick={() => setConfirmCard(card.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 border-t pt-3">

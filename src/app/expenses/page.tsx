@@ -25,7 +25,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       .select("id, name, color, kind, ideal_override, archived")
       .eq("household_id", household_id)
       .order("sort_order"),
-    supabase.from("cards").select("id, name, color").eq("household_id", household_id).order("sort_order"),
+    supabase.from("cards").select("id, name, color, archived").eq("household_id", household_id).order("sort_order"),
     supabase.from("household_settings").select("ideal_window").eq("household_id", household_id).maybeSingle(),
     supabase
       .from("ledger_entries")

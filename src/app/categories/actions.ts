@@ -197,18 +197,8 @@ export async function updateCard(id: string, patch: CardPatch): Promise<ActionRe
 
 export async function deleteCard(id: string): Promise<ActionResult> {
   const { supabase } = await context();
-  const { count } = await supabase
-    .from("ledger_entries")
-    .select("id", { count: "exact", head: true })
-    .eq("card_id", id);
-
-  if (count && count > 0) {
-    const { error } = await supabase.from("cards").update({ archived: true }).eq("id", id);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("cards").delete().eq("id", id);
-    if (error) return { error: error.message };
-  }
+  const { error } = await supabase.from("cards").delete().eq("id", id);
+  if (error) return { error: error.message };
 
   revalidatePath("/categories");
   return {};
