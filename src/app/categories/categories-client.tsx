@@ -281,8 +281,8 @@ export function CategoriesClient({
                 <div className="-mx-4 flex items-center gap-2 px-5 py-1">
                   <span className="min-w-0 truncate text-base font-bold">Regular categories</span>
                   <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs">
-                    <span className="w-20 text-right text-muted-foreground">Spending</span>
                     <span className="w-20 text-right text-muted-foreground">Ideal</span>
+                    <span className="w-20 text-right text-muted-foreground">Spending</span>
                     <span className="w-6" aria-hidden />
                   </span>
                 </div>
@@ -316,8 +316,8 @@ export function CategoriesClient({
                         <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
                         <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
                         <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
-                          <span className="w-20 text-right">{money(groupSpent)}</span>
                           <span className="w-20 text-right text-muted-foreground">{money(groupBudget)}</span>
+                          <span className="w-20 text-right">{money(groupSpent)}</span>
                           {group.id ? (
                             <span
                               draggable
@@ -569,8 +569,8 @@ function CategoryRow({
           <Repeat className="size-4" />
         </button>
       </span>
-      <span className="w-20 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
       <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{category.no_ideal ? "" : money(category.ideal)}</span>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
       <span
         draggable
         aria-label={`Reorder ${category.name}`}
@@ -678,12 +678,12 @@ function CategoryDetail({
 
         <div className="grid grid-cols-3 gap-3 border-y py-3 text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">Spending</p>
-            <p className="text-lg font-semibold tabular-nums">{money(spent)}</p>
-          </div>
-          <div>
             <p className="text-xs text-muted-foreground">Ideal</p>
             <p className="text-lg font-semibold tabular-nums">{category.no_ideal ? "—" : money(category.ideal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Spending</p>
+            <p className="text-lg font-semibold tabular-nums">{money(spent)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Difference</p>
