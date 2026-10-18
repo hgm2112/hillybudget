@@ -66,7 +66,7 @@ type Group = { id: string; name: string; color: string; sort_order: number };
 type CardItem = { id: string; name: string; color: string; sort_order: number; archived: boolean };
 type Total = { category_id: string; month: string; total: number };
 
-const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a"];
+const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a", "#a15c1e"];
 
 function shortMonth(key: string) {
   return new Date(key + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
