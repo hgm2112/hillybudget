@@ -262,11 +262,11 @@ export function CategoriesClient({
                       style={{ "--group-color": group.color } as React.CSSProperties}
                     >
                       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                      <span className="min-w-0 truncate text-sm font-medium">{group.name}</span>
+                      <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
                       <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
                       <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs tabular-nums">
                         <span className="w-16 text-right text-muted-foreground">{money(groupBudget)}</span>
-                        <span className="w-16 text-right">{money(groupSpent)}</span>
+                        <span className="w-16 text-right text-sm font-bold">{money(groupSpent)}</span>
                         <span className="w-6" aria-hidden />
                       </span>
                     </div>
