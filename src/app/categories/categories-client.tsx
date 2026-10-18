@@ -258,7 +258,7 @@ export function CategoriesClient({
                 return (
                   <div key={group.id || "ungrouped"} className="space-y-1">
                     <div
-                      className="group-tint flex items-center gap-2 rounded-md px-2 py-1"
+                      className="group-tint -mx-4 flex items-center gap-2 px-5 py-1"
                       style={{ "--group-color": group.color } as React.CSSProperties}
                     >
                       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
