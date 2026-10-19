@@ -16,7 +16,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, kind, color, sort_order, original_amount, interest_rate, monthly_payment, start_date")
+      .select("id, name, kind, color, sort_order, original_amount")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase.from("account_balances").select("id, account_id, month, balance").eq("household_id", household_id),
@@ -48,12 +48,11 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
       <AccountsClient
+        householdId={household_id}
         month={month}
         accounts={(accounts ?? []).map((account) => ({
           ...account,
           original_amount: numeric(account.original_amount),
-          interest_rate: numeric(account.interest_rate),
-          monthly_payment: numeric(account.monthly_payment),
         }))}
         balances={(balances ?? []).map((balance) => ({ ...balance, balance: Number(balance.balance) }))}
         skipped={(skipped ?? []).map((row) => row.month)}
