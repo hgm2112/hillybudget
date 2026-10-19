@@ -4,6 +4,8 @@ import { createElement, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive,
+  ChevronDown,
+  ChevronRight,
   Eye,
   GripVertical,
   ListChecks,
@@ -73,6 +75,8 @@ type Recurring = { id: string; amount: number; card_id: string | null };
 
 const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a", "#a15c1e"];
 
+const PREVIEW_ICONS = ["home", "car", "utensils", "shoppingBag", "heartPulse", "zap", "wifi", "wallet"];
+
 const PERIODS = [
   { key: "3M", months: 3 },
   { key: "6M", months: 6 },
@@ -116,6 +120,16 @@ export function CategoriesClient({
   const [overCat, setOverCat] = useState<string | null>(null);
   const [dragGroup, setDragGroup] = useState<string | null>(null);
   const [overGroup, setOverGroup] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((existing) => {
+      const next = new Set(existing);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -292,15 +306,18 @@ export function CategoriesClient({
                 {groupsWithCategories.map(({ group, categories: groupCategories }) => {
                   const groupBudget = groupCategories.reduce((sum, category) => sum + category.ideal, 0);
                   const groupSpent = groupCategories.reduce((sum, category) => sum + spentOf(category.id), 0);
+                  const groupKey = group.id || "ungrouped";
+                  const isCollapsed = collapsedGroups.has(groupKey);
                   return (
                     <div key={group.id || "ungrouped"} className="space-y-1 pt-1">
                       <div
                         className={cn(
-                          "group-tint group -mx-4 flex items-center gap-2 rounded-lg px-5 py-1",
+                          "group-tint group -mx-4 flex cursor-pointer items-center gap-2 rounded-lg px-5 py-1",
                           dragGroup === group.id && "opacity-50",
                           overGroup === group.id && "ring-2 ring-inset ring-primary"
                         )}
                         style={{ "--group-color": group.color } as React.CSSProperties}
+                        onClick={() => toggleGroup(groupKey)}
                         onDragOver={(event) => {
                           if (!dragGroup || !group.id || dragGroup === group.id) return;
                           event.preventDefault();
@@ -312,6 +329,11 @@ export function CategoriesClient({
                           dropGroup(group.id);
                         }}
                       >
+                        {isCollapsed ? (
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                        )}
                         <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
                         <span className="min-w-0 truncate text-base font-bold">{group.name}</span>
                         <Badge variant="secondary" className="shrink-0">{groupCategories.length}</Badge>
@@ -321,6 +343,7 @@ export function CategoriesClient({
                           {group.id ? (
                             <span
                               draggable
+                              onClick={(event) => event.stopPropagation()}
                               onDragStart={() => setDragGroup(group.id)}
                               onDragEnd={() => {
                                 setDragGroup(null);
@@ -336,32 +359,34 @@ export function CategoriesClient({
                           )}
                         </span>
                       </div>
-                      <div className="space-y-0.5">
-                        {groupCategories.map((category) => (
-                          <CategoryRow
-                            key={category.id}
-                            category={category}
-                            spent={spentOf(category.id)}
-                            selected={selected?.id === category.id}
-                            recurringOn={Boolean(recurring[category.id])}
-                            onSelect={() => setSelectedId(category.id)}
-                            onToggleRecurring={(enabled) => toggleRecurring(category, enabled)}
-                            dragging={dragCat === category.id}
-                            dropTarget={overCat === category.id}
-                            onDragStart={() => setDragCat(category.id)}
-                            onDragEnd={() => {
-                              setDragCat(null);
-                              setOverCat(null);
-                            }}
-                            onDragOver={() => {
-                              if (dragCat && dragCat !== category.id && groupIdOf(dragCat) === group.id) {
-                                setOverCat(category.id);
-                              }
-                            }}
-                            onDrop={() => dropCategory(category.id)}
-                          />
-                        ))}
-                      </div>
+                      {!isCollapsed && (
+                        <div className="space-y-0.5">
+                          {groupCategories.map((category) => (
+                            <CategoryRow
+                              key={category.id}
+                              category={category}
+                              spent={spentOf(category.id)}
+                              selected={selected?.id === category.id}
+                              recurringOn={Boolean(recurring[category.id])}
+                              onSelect={() => setSelectedId(category.id)}
+                              onToggleRecurring={(enabled) => toggleRecurring(category, enabled)}
+                              dragging={dragCat === category.id}
+                              dropTarget={overCat === category.id}
+                              onDragStart={() => setDragCat(category.id)}
+                              onDragEnd={() => {
+                                setDragCat(null);
+                                setOverCat(null);
+                              }}
+                              onDragOver={() => {
+                                if (dragCat && dragCat !== category.id && groupIdOf(dragCat) === group.id) {
+                                  setOverCat(category.id);
+                                }
+                              }}
+                              onDrop={() => dropCategory(category.id)}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -608,6 +633,7 @@ function CategoryDetail({
   onArchive: () => void;
 }) {
   const [iconQuery, setIconQuery] = useState("");
+  const [showAllIcons, setShowAllIcons] = useState(false);
   const recurringOn = Boolean(recurring);
   const budgetOn = category.ideal_override != null;
   const effectiveBudget = category.ideal_override ?? category.ideal;
@@ -619,6 +645,10 @@ function CategoryDetail({
     if (!query) return CATEGORY_ICON_NAMES;
     return CATEGORY_ICON_NAMES.filter((name) => name.toLowerCase().includes(query));
   }, [iconQuery]);
+  const previewIcons =
+    category.icon && !PREVIEW_ICONS.includes(category.icon)
+      ? [category.icon, ...PREVIEW_ICONS]
+      : PREVIEW_ICONS;
 
   function commitName(value: string) {
     const trimmed = value.trim();
@@ -704,7 +734,7 @@ function CategoryDetail({
 
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor={`detail-name-${category.id}`}>Category name</Label>
               <Input
@@ -740,6 +770,8 @@ function CategoryDetail({
                 <option value="income">Income</option>
               </select>
             </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Color</Label>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -772,49 +804,90 @@ function CategoryDetail({
                 />
               </div>
             </div>
-          </div>
-          <div className="space-y-1">
-            <Label>Icon</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                value={iconQuery}
-                onChange={(event) => setIconQuery(event.target.value)}
-                placeholder="Search icons"
-                className="h-8"
-              />
-              <Button
-                type="button"
-                variant={category.icon === null ? "default" : "outline"}
-                size="sm"
-                onClick={() => onAction(updateCategory(category.id, { icon: null }))}
-              >
-                Auto
-              </Button>
-            </div>
-            <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-md border p-2">
-              {filteredIcons.map((iconName) => {
-                const Icon = CATEGORY_ICONS[iconName];
-                return (
-                  <button
-                    key={iconName}
-                    type="button"
-                    title={iconName}
-                    aria-label={iconName}
-                    aria-pressed={category.icon === iconName}
-                    onClick={() => onAction(updateCategory(category.id, { icon: iconName }))}
-                    className={cn(
-                      "grid size-8 place-items-center rounded-md border",
-                      category.icon === iconName
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-transparent hover:bg-muted"
+            <div className="space-y-1">
+              <Label>Icon</Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {previewIcons.map((iconName) => {
+                  const Icon = CATEGORY_ICONS[iconName];
+                  return (
+                    <button
+                      key={iconName}
+                      type="button"
+                      title={iconName}
+                      aria-label={iconName}
+                      aria-pressed={category.icon === iconName}
+                      onClick={() => onAction(updateCategory(category.id, { icon: iconName }))}
+                      className={cn(
+                        "grid size-7 place-items-center rounded-md border",
+                        category.icon === iconName
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-transparent hover:bg-muted"
+                      )}
+                    >
+                      <Icon className="size-4" />
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  aria-label={showAllIcons ? "Hide all icons" : "Show all icons"}
+                  aria-expanded={showAllIcons}
+                  onClick={() => setShowAllIcons((value) => !value)}
+                  className={cn(
+                    "grid size-7 place-items-center rounded-md border",
+                    showAllIcons
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-transparent hover:bg-muted"
+                  )}
+                >
+                  <ChevronDown className={cn("size-4 transition-transform", showAllIcons && "rotate-180")} />
+                </button>
+              </div>
+              {showAllIcons && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={iconQuery}
+                      onChange={(event) => setIconQuery(event.target.value)}
+                      placeholder="Search icons"
+                      className="h-8"
+                    />
+                    <Button
+                      type="button"
+                      variant={category.icon === null ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => onAction(updateCategory(category.id, { icon: null }))}
+                    >
+                      Auto
+                    </Button>
+                  </div>
+                  <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-md border p-2">
+                    {filteredIcons.map((iconName) => {
+                      const Icon = CATEGORY_ICONS[iconName];
+                      return (
+                        <button
+                          key={iconName}
+                          type="button"
+                          title={iconName}
+                          aria-label={iconName}
+                          aria-pressed={category.icon === iconName}
+                          onClick={() => onAction(updateCategory(category.id, { icon: iconName }))}
+                          className={cn(
+                            "grid size-8 place-items-center rounded-md border",
+                            category.icon === iconName
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-transparent hover:bg-muted"
+                          )}
+                        >
+                          <Icon className="size-4" />
+                        </button>
+                      );
+                    })}
+                    {filteredIcons.length === 0 && (
+                      <p className="px-1 py-2 text-xs text-muted-foreground">No icons match.</p>
                     )}
-                  >
-                    <Icon className="size-4" />
-                  </button>
-                );
-              })}
-              {filteredIcons.length === 0 && (
-                <p className="px-1 py-2 text-xs text-muted-foreground">No icons match.</p>
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -176,6 +176,13 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `categories/page.tsx` and `expenses/page.tsx` select `no_ideal` and force `ideal = 0` (and `p_override = null`) for no-ideal categories; `updateCategory` accepts `no_ideal`.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Collapsible groups + compact detail section (implemented)
+
+- Group headers in the **Regular categories** card are now collapsible: clicking a header toggles its rows (`collapsedGroups` `Set` in `CategoriesClient`, local component state only — default expanded, resets on reload). A `ChevronDown`/`ChevronRight` precedes the group color dot; the drag grip calls `stopPropagation` so reordering never toggles. Totals/badge stay in the header.
+- The detail panel's **Details** section is more compact: Row 1 is a `grid sm:grid-cols-3` (**Category name · Group · Type**); Row 2 is a `grid sm:grid-cols-2` (**Color · Icon**), side by side.
+- The **Icon** cell shows a curated preview row (`PREVIEW_ICONS = home, car, utensils, shoppingBag, heartPulse, zap, wifi, wallet`); if the current icon isn't in that set it is prepended so the selection stays visible. The last item is a chevron button (`showAllIcons`) that expands the existing search input, `Auto` button, and full `CATEGORY_ICON_NAMES` grid.
+- Only `categories-client.tsx` changed (UI-only, no schema/DB change). `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
