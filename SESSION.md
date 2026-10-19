@@ -185,16 +185,23 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 
 ### Reporting/display fixes (implemented)
 
-- `/dashboard` charts no longer show the current calendar month when it has no data. `dashboard-client.tsx` now anchors `periodMonths` to the latest month present in `totals` (ledger flows) or `balances` (net worth), falling back to the current month. `accounts/accounts-client.tsx` balance-change color is now direction-aware (`improving`): asset increase = green, loan decrease = green.
+- `/dashboard` charts no longer show an empty current calendar month. `dashboard-client.tsx` splits the window: `flowMonths` (ends at the latest **ledger** month) drives spending-trend, income-vs-expenses, spending-by-category, and the Income/Expenses summaries; `netMonths` (ends at the latest **balance** month) drives the net-worth chart. `accounts/accounts-client.tsx` balance-change color is direction-aware (`improving`): asset increase = green, loan decrease = green.
 - Sidebar section label for `loan` is now **Loan** (`app-sidebar.tsx`).
 - Sidebar balances and all `/accounts` amounts use `moneyWhole` (whole dollars, no cents); the per-row percent stays at 2 decimals.
 - `/stats` now defaults `selectedMonth` to the latest recorded entry month (`stats/page.tsx`) instead of the current month.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Income corrections + default income (migration applied)
+
+- `supabase/migrations/0010_income_fixes.sql` **is applied** (data-only; no schema/RLS/policy change). It: reclassifies `Sign Up Bonuses` from expense → income and flips its entry to `+400`; flips the 11 negative `Ebay Earnings` entries to positive (`abs`); deletes 3 October-2026 test Groceries entries (by id); creates one active `recurring_items` row for the `Income` category (`7500`, `start_month` 2025-01-01); and sets every `Income` ledger entry to `7500`, linking them to that recurring item so "Add recurring items" dedupes and fills `7500` for new months.
+- Result: default income is **$7,500/month** from 2025-01 onward; eBay earnings and sign-up bonuses add on top (e.g. 2026-02 income = 7500 + 8008.75 + 400 = 15,908.75). Change the base by editing the `Income` recurring item.
+- `src/lib/import/normalize.ts` now stores income-category amounts as positive (`Math.abs`) so re-imports don't reintroduce negatives.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
-- Migrations `0001`–`0009` are applied to the live project (`supabase migration list`: local = remote).
+- Migrations `0001`–`0010` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 

@@ -66,6 +66,20 @@ function rangeLabel(months: string[]) {
   return `${first} – ${last}`;
 }
 
+function windowMonths(period: Period, anchor: string) {
+  if (period === "YTD") {
+    const months: string[] = [];
+    let cursor = `${anchor.slice(0, 4)}-01-01`;
+    while (cursor <= anchor) {
+      months.push(cursor);
+      cursor = shiftMonth(cursor, 1);
+    }
+    return months;
+  }
+  const count = PERIODS.find((entry) => entry.key === period)?.months ?? 12;
+  return Array.from({ length: count }, (_, index) => shiftMonth(anchor, index - (count - 1)));
+}
+
 export function DashboardClient({
   categories,
   totals,
@@ -79,26 +93,20 @@ export function DashboardClient({
 }) {
   const [period, setPeriod] = useState<Period>("12M");
 
-  const anchor = useMemo(() => {
+  const flowAnchor = useMemo(() => {
     let latest = "";
     for (const row of totals) if (row.month > latest) latest = row.month;
+    return latest || toMonthKey(new Date());
+  }, [totals]);
+
+  const netAnchor = useMemo(() => {
+    let latest = "";
     for (const balance of balances) if (balance.month > latest) latest = balance.month;
     return latest || toMonthKey(new Date());
-  }, [totals, balances]);
+  }, [balances]);
 
-  const periodMonths = useMemo(() => {
-    if (period === "YTD") {
-      const months: string[] = [];
-      let cursor = `${anchor.slice(0, 4)}-01-01`;
-      while (cursor <= anchor) {
-        months.push(cursor);
-        cursor = shiftMonth(cursor, 1);
-      }
-      return months;
-    }
-    const count = PERIODS.find((entry) => entry.key === period)?.months ?? 12;
-    return Array.from({ length: count }, (_, index) => shiftMonth(anchor, index - (count - 1)));
-  }, [period, anchor]);
+  const flowMonths = useMemo(() => windowMonths(period, flowAnchor), [period, flowAnchor]);
+  const netMonths = useMemo(() => windowMonths(period, netAnchor), [period, netAnchor]);
 
   const kindById = useMemo(() => new Map(categories.map((category) => [category.id, category.kind])), [categories]);
   const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
@@ -116,27 +124,27 @@ export function DashboardClient({
     return map;
   }, [totals, kindById]);
 
-  const rangeIncome = periodMonths.reduce((sum, month) => sum + (monthly.get(month)?.income ?? 0), 0);
-  const rangeExpense = periodMonths.reduce((sum, month) => sum + (monthly.get(month)?.expense ?? 0), 0);
+  const rangeIncome = flowMonths.reduce((sum, month) => sum + (monthly.get(month)?.income ?? 0), 0);
+  const rangeExpense = flowMonths.reduce((sum, month) => sum + (monthly.get(month)?.expense ?? 0), 0);
   const netCashFlow = rangeIncome - rangeExpense;
 
   const trendData = useMemo(
-    () => periodMonths.map((month) => ({ key: month, label: shortLabel(month), expense: monthly.get(month)?.expense ?? 0 })),
-    [periodMonths, monthly]
+    () => flowMonths.map((month) => ({ key: month, label: shortLabel(month), expense: monthly.get(month)?.expense ?? 0 })),
+    [flowMonths, monthly]
   );
   const compareData = useMemo(
     () =>
-      periodMonths.map((month) => ({
+      flowMonths.map((month) => ({
         key: month,
         label: shortLabel(month),
         income: monthly.get(month)?.income ?? 0,
         expense: monthly.get(month)?.expense ?? 0,
       })),
-    [periodMonths, monthly]
+    [flowMonths, monthly]
   );
 
   const categoryData = useMemo(() => {
-    const inRange = new Set(periodMonths);
+    const inRange = new Set(flowMonths);
     const map = new Map<string, number>();
     for (const row of totals) {
       if (!inRange.has(row.month) || kindById.get(row.category_id) !== "expense") continue;
@@ -147,7 +155,7 @@ export function DashboardClient({
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
-  }, [totals, periodMonths, kindById, categoryById]);
+  }, [totals, flowMonths, kindById, categoryById]);
 
   const latestByAccount = useMemo(() => {
     const map = new Map<string, { month: string; balance: number }>();
@@ -175,7 +183,7 @@ export function DashboardClient({
   }, [latestByAccount, accountKind]);
 
   const netWorthSeries = useMemo(() => {
-    const inRange = new Set(periodMonths);
+    const inRange = new Set(netMonths);
     const byMonth = new Map<string, number>();
     for (const balance of balances) {
       if (!inRange.has(balance.month)) continue;
@@ -184,10 +192,10 @@ export function DashboardClient({
       const delta = kind === "loan" ? -balance.balance : balance.balance;
       byMonth.set(balance.month, (byMonth.get(balance.month) ?? 0) + delta);
     }
-    return periodMonths
+    return netMonths
       .filter((month) => byMonth.has(month))
       .map((month) => ({ key: month, label: shortLabel(month), net: byMonth.get(month) ?? 0 }));
-  }, [balances, periodMonths, accountKind]);
+  }, [balances, netMonths, accountKind]);
 
   return (
     <>
@@ -219,14 +227,14 @@ export function DashboardClient({
           <SummaryCard
             label="Income"
             value={money(rangeIncome)}
-            caption={rangeLabel(periodMonths)}
+            caption={rangeLabel(flowMonths)}
             tone="positive"
             icon={<TrendingUp className="size-4" />}
           />
           <SummaryCard
             label="Expenses"
             value={money(rangeExpense)}
-            caption={rangeLabel(periodMonths)}
+            caption={rangeLabel(flowMonths)}
             tone="negative"
             icon={<TrendingDown className="size-4" />}
           />
