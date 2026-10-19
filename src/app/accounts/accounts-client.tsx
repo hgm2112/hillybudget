@@ -427,18 +427,20 @@ export function AccountsClient({
       const payoff = payoffInfo(currentValue(account.id) ?? 0, account.original_amount);
       if (!payoff) {
         return (
-          <button
-            type="button"
-            className="text-xs text-primary underline-offset-2 hover:underline"
-            onClick={() => openEdit(account)}
-          >
-            Add original loan amount
-          </button>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="text-xs text-primary underline-offset-2 hover:underline"
+              onClick={() => openEdit(account)}
+            >
+              Add original loan amount
+            </button>
+          </div>
         );
       }
       return (
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <div className="flex items-center justify-center gap-2">
+          <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${payoff.percent}%`, backgroundColor: GROUP_COLORS.loan }} />
           </div>
           <span className="w-32 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
@@ -451,8 +453,8 @@ export function AccountsClient({
     const share = value !== null ? sharePercent(value, group.total) : null;
     if (!group.multi || share === null) return null;
     return (
-      <div className="flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+      <div className="flex items-center justify-center gap-2">
+        <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: GROUP_COLORS[account.kind] }} />
         </div>
         <span className="w-9 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{Math.round(share)}%</span>
@@ -469,18 +471,17 @@ export function AccountsClient({
     return (
       <div
         key={account.id}
-        className="grid grid-cols-2 items-center gap-x-3 gap-y-2 px-4 py-2.5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_9rem_auto]"
+        className="grid grid-cols-2 items-center gap-x-3 gap-y-1 px-4 py-1 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_auto]"
       >
         <div className="flex min-w-0 items-center gap-2 md:col-start-1 md:row-start-1">
           <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: GROUP_COLORS[account.kind] }} />
-          <span className="truncate font-medium">{account.name}</span>
+          <span className="truncate text-sm font-semibold">{account.name}</span>
           {archived && (
             <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">archived</span>
           )}
         </div>
 
-        <div className="relative md:col-start-3 md:row-start-1">
-          <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+        <div className="md:col-start-3 md:row-start-1">
           <Input
             id={`balance-${account.id}`}
             value={raw}
@@ -494,7 +495,7 @@ export function AccountsClient({
             onBlur={() => onBlur(account.id)}
             onKeyDown={(event) => onInputKeyDown(event, account.id)}
             placeholder={previous !== null ? formatBalance(previous) : "0.00"}
-            className="pl-6 text-right tabular-nums"
+            className="text-center tabular-nums"
           />
         </div>
 
@@ -531,7 +532,7 @@ export function AccountsClient({
   return (
     <>
       <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-        <h1 className="text-2xl font-bold">Accounts</h1>
+        <h1 className="text-2xl font-semibold">Accounts</h1>
         <div className="flex justify-center">
           <MonthNav value={month} months={months} onSelect={(next) => startTransition(() => router.push(`/accounts?month=${next}`))} />
         </div>
@@ -547,11 +548,11 @@ export function AccountsClient({
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {summaries.map((summary) => (
           <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
               {summary.label}
             </div>
-            <div className="mt-1 text-2xl leading-tight font-bold tabular-nums md:text-[28px]">{moneyWhole(summary.value)}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{moneyWhole(summary.value)}</div>
             <div className="mt-1.5">
               {prevMonth ? (
                 <ChangeChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
@@ -566,7 +567,7 @@ export function AccountsClient({
       <div className="relative rounded-xl border bg-card">
         <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
           <div>
-            <h2 className="text-lg font-bold">Balances for {monthLabel(month)}</h2>
+            <h2 className="text-sm font-semibold">Balances for {monthLabel(month)}</h2>
             <p className="text-xs text-muted-foreground">Type a balance, then Tab to the next account.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -623,10 +624,10 @@ export function AccountsClient({
             </Button>
           </div>
         ) : (
-          <div className={cn("mt-2", isSkipped && "pointer-events-none opacity-40")}>
+          <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
             {groups.map((group) => (
               <div key={group.kind} className="border-t border-border/60 first:border-t-0">
-                <div className="flex items-center gap-3 px-4 py-2">
+                <div className="flex items-center gap-3 px-4 py-1.5">
                   <span
                     className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
                     style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
@@ -637,7 +638,7 @@ export function AccountsClient({
                     {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
                   </span>
                   <div className="ml-auto flex items-center gap-3">
-                    <span className="font-bold tabular-nums">{moneyWhole(group.total)}</span>
+                    <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
                     {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
                   </div>
                 </div>
@@ -660,7 +661,7 @@ export function AccountsClient({
         {isSkipped && (
           <div className="absolute inset-0 grid place-items-center">
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-background/80 px-8 py-10 text-center shadow-sm backdrop-blur-sm">
-              <p className="text-2xl font-bold text-muted-foreground">No data this month</p>
+              <p className="text-2xl font-semibold text-muted-foreground">No data this month</p>
               <Button variant="outline" onClick={() => run(unskipMonth(month))}>Undo skip</Button>
             </div>
           </div>
