@@ -443,7 +443,7 @@ export function AccountsClient({
           <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${payoff.percent}%`, backgroundColor: GROUP_COLORS.loan }} />
           </div>
-          <span className="w-32 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+          <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
             {Math.round(payoff.percent)}% paid off · {moneyWhole(payoff.paid)}
           </span>
         </div>
@@ -457,7 +457,7 @@ export function AccountsClient({
         <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: GROUP_COLORS[account.kind] }} />
         </div>
-        <span className="w-9 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{Math.round(share)}%</span>
+        <span className="w-9 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">{Math.round(share)}%</span>
       </div>
     );
   }
@@ -481,7 +481,7 @@ export function AccountsClient({
           )}
         </div>
 
-        <div className="md:col-start-3 md:row-start-1">
+        <div className="flex items-center md:col-start-3 md:row-start-1">
           <Input
             id={`balance-${account.id}`}
             value={raw}
@@ -499,7 +499,7 @@ export function AccountsClient({
           />
         </div>
 
-        <div className="md:col-start-2 md:row-start-1">{renderProgress(account, group)}</div>
+        <div className="flex items-center justify-center md:col-start-2 md:row-start-1">{renderProgress(account, group)}</div>
 
         <div className="flex items-center justify-end gap-2 md:col-start-4 md:row-start-1">
           {info && <ChangeChip info={info} showPercent />}
@@ -627,17 +627,19 @@ export function AccountsClient({
           <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
             {groups.map((group) => (
               <div key={group.kind} className="border-t border-border/60 first:border-t-0">
-                <div className="flex items-center gap-3 px-4 py-1.5">
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
-                    style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
-                  >
-                    {GROUP_LABELS[group.kind]}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
-                  </span>
-                  <div className="ml-auto flex items-center gap-3">
+                <div className="flex items-center gap-3 px-4 py-1.5 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_auto] md:gap-x-3">
+                  <div className="flex items-center gap-3 md:col-start-1">
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
+                      style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
+                    >
+                      {GROUP_LABELS[group.kind]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
+                    </span>
+                  </div>
+                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-center">
                     <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
                     {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
                   </div>
