@@ -145,6 +145,7 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `CategoryDialog` (used by both New and Edit via `⋯ → Edit`) has an **Icon** section: search box, wrapped icon grid, and an **Auto** button to clear the override. Server actions (`addCategory`/`updateCategory`) validate the icon name against the registry.
 - Icons render in the grouped list, the flat "All regular categories" list, and the excluded list. PR #17, `5842fa3`.
 
+<<<<<<< HEAD
 ### Categories recurring controls (implemented)
 
 - `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`). Group headers show `spent / budget`.
@@ -225,6 +226,18 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Loan metadata is dropped from the UI entirely, including the loan-only fields in the Add-account form. `accounts/page.tsx` no longer selects them and `addAccount`'s four loan fields are now optional. `updateAccount` remains exported but is no longer called from the client.
 - The DB columns `accounts.{original_amount,interest_rate,monthly_payment,start_date}` and their existing data are **preserved** (no schema change, no migration); the app simply stops reading/writing them.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
+=======
+### Accounts page redesign (implemented)
+
+- Full redesign of `/accounts` (`src/app/accounts/accounts-client.tsx`): header (title · `MonthNav` · "Changes vs `<latest earlier month with balances>`"), four flat summary cards (Liquid / Retirement / Debt / Net worth — compact, colored dot, ~28px tabular value, change chip; **Net worth is intentionally not emphasized/dark**), and a single **Balances for `<Month Year>`** card with helper text, save status, "Carry forward from `<prev>`", and a **⋯** menu (Clear balances for this month w/ confirm · Show archived · Skip/Unskip this month).
+- Balances are grouped **Liquid → Retirement → Loans** with a pill header (Liquid `#4A7BA3`, Retirement `#7767A6`, Loans `#D85700`; literal hex, per request), "N accounts", subtotal, and a change chip. Rows are `name | progress | $ input | change chip | ⋯` (stacked on mobile). The dashed **+ Add account** button sits at the bottom.
+- **Autosave** replaces all per-row Save/Archive/Delete buttons and the top Save balances: saves on blur and Enter via `saveBalances` (upsert on `(account_id, month)`), shows Saving… / All changes saved / "Couldn't save. Retry", never writes unchanged/invalid values, and Enter/Tab moves focus to the next account's input. Inputs have a `$` prefix, right alignment, thousands separators after blur, an `aria-label`, and evaluate simple arithmetic (`12000+450`) through `parseBalanceInput`.
+- **Progress column**: liquid/retirement show a share-of-group bar (hidden when the group has one account) + percent; loans show a paid-off bar + "X% paid off · $Y paid" (clamped 0–100), or an "Add original loan amount" link when `accounts.original_amount` is unset.
+- **Realtime**: subscribes to `account_balances` (filtered by `household_id`) and calls `router.refresh()`; the reconcile effect never overwrites a focused or dirty input. Archived accounts keep history, are hidden by default, and are excluded from totals (unchanged `account_archive_periods` behavior). Edit/Delete flow through a new `AccountDialog` (create + edit: name, type, color, and — for loans — Original loan amount) and a `ConfirmDialog` for Delete/Clear.
+- New pure helpers in `src/lib/accounts.ts` (`parseBalanceInput`, `formatBalance`, `deltaInfo`, `sharePercent`, `payoffInfo`, `previousRecordedMonth`, `latestBalanceBefore`, `carryForwardItems`, `GROUP_ORDER`). Empty states cover "no accounts" and "no balances yet for `<month>`".
+- `accounts/page.tsx` now selects `original_amount` only and passes `householdId`; `addAccount`'s loan fields are optional (reused the existing `accounts.original_amount` — **no migration, no schema/RLS change, no data touched**). Unit tests were skipped (no test runner in the repo).
+- `npm run lint` + `npm run build` pass. No runtime smoke test; Realtime and autosave were not exercised against the live DB.
+>>>>>>> feat/accounts-redesign
 
 ## Checks
 

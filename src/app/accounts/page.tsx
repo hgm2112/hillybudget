@@ -16,7 +16,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, kind, color, sort_order")
+      .select("id, name, kind, color, sort_order, original_amount")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase.from("account_balances").select("id, account_id, month, balance").eq("household_id", household_id),
@@ -43,11 +43,17 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const sortedMonths = [...monthSet].sort();
   const months = monthRange(sortedMonths[0], sortedMonths[sortedMonths.length - 1]);
 
+  const numeric = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+
   return (
     <main className="min-h-screen space-y-6 p-4 md:p-8">
       <AccountsClient
+        householdId={household_id}
         month={month}
-        accounts={accounts ?? []}
+        accounts={(accounts ?? []).map((account) => ({
+          ...account,
+          original_amount: numeric(account.original_amount),
+        }))}
         balances={(balances ?? []).map((balance) => ({ ...balance, balance: Number(balance.balance) }))}
         skipped={(skipped ?? []).map((row) => row.month)}
         archivedIds={(archives ?? []).map((row) => row.account_id)}
