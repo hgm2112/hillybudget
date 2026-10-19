@@ -5,12 +5,11 @@ import { ExpensesClient } from "./expenses-client";
 
 const MONTH_RE = /^\d{4}-\d{2}-01$/;
 
-export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string; category?: string }> }) {
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const { household_id } = await requireHousehold();
   const params = await searchParams;
   const currentMonth = toMonthKey(new Date());
   const month = MONTH_RE.test(params.month ?? "") ? (params.month as string) : currentMonth;
-  const focusCategory = params.category ?? null;
 
   const supabase = await createClient();
   const [
@@ -20,15 +19,13 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     { data: entries },
     { data: firstEntry },
     { data: lastEntry },
-    { data: groups },
   ] = await Promise.all([
     supabase
       .from("categories")
-      .select("id, name, color, kind, ideal_override, no_ideal, archived")
+      .select("id, name, color, kind, ideal_override, archived")
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase.from("cards").select("id, name, color, archived").eq("household_id", household_id).order("sort_order"),
-    supabase.from("category_groups").select("id, name, color, sort_order").eq("household_id", household_id).order("sort_order"),
     supabase.from("household_settings").select("ideal_window").eq("household_id", household_id).maybeSingle(),
     supabase
       .from("ledger_entries")
@@ -62,14 +59,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         p_category_id: category.id,
         p_current_month: month,
         p_window: idealWindow,
-        p_override: category.no_ideal ? null : category.ideal_override,
+        p_override: category.ideal_override,
       })
     )
   );
 
   const idealByCategory: Record<string, number> = {};
   idealCategories.forEach((category, index) => {
-    idealByCategory[category.id] = category.no_ideal ? 0 : Number(idealResults[index]?.data ?? 0);
+    idealByCategory[category.id] = Number(idealResults[index]?.data ?? 0);
   });
 
   return (
@@ -81,8 +78,6 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         cards={cards ?? []}
         idealByCategory={idealByCategory}
         months={months}
-        focusCategory={focusCategory}
-        groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name, color: g.color, sort_order: g.sort_order }))}
         entries={(entries ?? []).map((entry) => ({ ...entry, amount: Number(entry.amount) }))}
       />
     </main>
