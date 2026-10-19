@@ -79,7 +79,12 @@ export function DashboardClient({
 }) {
   const [period, setPeriod] = useState<Period>("12M");
 
-  const anchor = toMonthKey(new Date());
+  const anchor = useMemo(() => {
+    let latest = "";
+    for (const row of totals) if (row.month > latest) latest = row.month;
+    for (const balance of balances) if (balance.month > latest) latest = balance.month;
+    return latest || toMonthKey(new Date());
+  }, [totals, balances]);
 
   const periodMonths = useMemo(() => {
     if (period === "YTD") {

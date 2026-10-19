@@ -12,10 +12,14 @@ export default async function StatsPage() {
     supabase.from("ledger_entries").select("month, category_id, amount").eq("household_id", household_id),
   ]);
 
+  const latestRecorded =
+    (entries ?? []).reduce((latest, entry) => (entry.month > latest ? entry.month : latest), "") ||
+    toMonthKey(new Date());
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
       <StatsClient
-        defaultMonth={toMonthKey(new Date())}
+        defaultMonth={latestRecorded}
         categories={(categories ?? []).map((category) => ({
           id: category.id,
           name: category.name,

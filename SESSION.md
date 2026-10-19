@@ -183,6 +183,14 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - The **Icon** cell shows a curated preview row (`PREVIEW_ICONS = home, car, utensils, shoppingBag, heartPulse, zap, wifi, wallet`); if the current icon isn't in that set it is prepended so the selection stays visible. The last item is a chevron button (`showAllIcons`) that expands the existing search input, `Auto` button, and full `CATEGORY_ICON_NAMES` grid.
 - Only `categories-client.tsx` changed (UI-only, no schema/DB change). `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Reporting/display fixes (implemented)
+
+- `/dashboard` charts no longer show the current calendar month when it has no data. `dashboard-client.tsx` now anchors `periodMonths` to the latest month present in `totals` (ledger flows) or `balances` (net worth), falling back to the current month. `accounts/accounts-client.tsx` balance-change color is now direction-aware (`improving`): asset increase = green, loan decrease = green.
+- Sidebar section label for `loan` is now **Loan** (`app-sidebar.tsx`).
+- Sidebar balances and all `/accounts` amounts use `moneyWhole` (whole dollars, no cents); the per-row percent stays at 2 decimals.
+- `/stats` now defaults `selectedMonth` to the latest recorded entry month (`stats/page.tsx`) instead of the current month.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
