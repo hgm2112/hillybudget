@@ -218,6 +218,14 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **Spending by category tooltip value:** its `<Bar>` has no `fill` (colors come from per-row `<Cell>`s), so Recharts' `entry.color` was `undefined` and the item fell back to the hardcoded `#000` (black on the dark popover). Added `itemStyle={{ color: "var(--popover-foreground)" }}` to that `<Tooltip>` and `fill="var(--popover-foreground)"` to its `<Bar>` (Cells still color the bars). Other charts keep their series-colored values.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Accounts page: loan card removed, grouped balances (2026-10-19)
+
+- Removed the `"{name} (loan)"` detail card from `/accounts` (projected payoff, Remaining/Original/Principal paid/Percent paid, and the Original amount / Interest rate / Monthly payment / Start date inputs). The **Debt** and **Net worth** summary tiles stay; net worth still subtracts `monthTotal("loan")`, and loans are still tracked by monthly balance (the loan row keeps its Save/Archive/Delete and change color).
+- The **Balances for {month}** list is now grouped **Liquid → Retirement → Loan** (same `sort_order` within each group) with a plain horizontal rule between groups (no section labels).
+- Loan metadata is dropped from the UI entirely, including the loan-only fields in the Add-account form. `accounts/page.tsx` no longer selects them and `addAccount`'s four loan fields are now optional. `updateAccount` remains exported but is no longer called from the client.
+- The DB columns `accounts.{original_amount,interest_rate,monthly_payment,start_date}` and their existing data are **preserved** (no schema change, no migration); the app simply stops reading/writing them.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.

@@ -176,10 +176,10 @@ export async function addAccount(input: {
   name: string;
   kind: AccountKind;
   color: string;
-  original_amount: number | null;
-  interest_rate: number | null;
-  monthly_payment: number | null;
-  start_date: string | null;
+  original_amount?: number | null;
+  interest_rate?: number | null;
+  monthly_payment?: number | null;
+  start_date?: string | null;
 }): Promise<ActionResult> {
   const name = input.name.trim();
   if (!name) return { error: "Name is required." };
@@ -202,10 +202,10 @@ export async function addAccount(input: {
     kind,
     color: input.color,
     sort_order: (last?.sort_order ?? -1) + 1,
-    original_amount: optionalNumber(input.original_amount),
-    interest_rate: optionalNumber(input.interest_rate),
-    monthly_payment: optionalNumber(input.monthly_payment),
-    start_date: input.start_date,
+    original_amount: optionalNumber(input.original_amount ?? null),
+    interest_rate: optionalNumber(input.interest_rate ?? null),
+    monthly_payment: optionalNumber(input.monthly_payment ?? null),
+    start_date: input.start_date ?? null,
   });
   if (error) return { error: error.message };
 
