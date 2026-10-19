@@ -332,6 +332,7 @@ export function AccountsClient({
               const value = currentValueFor(account.id);
               const change = value !== null && previousBalance !== null ? value - previousBalance : null;
               const percent = change !== null && previousBalance ? (change / previousBalance) * 100 : 0;
+              const improving = change !== null && (account.kind === "loan" ? change <= 0 : change >= 0);
               return (
                 <div key={account.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
                   <div className="flex items-center gap-2">
@@ -350,7 +351,7 @@ export function AccountsClient({
                   />
                   <div className="text-sm tabular-nums">
                     {!isSkipped && change !== null ? (
-                      <span className={change >= 0 ? "text-green-600" : "text-red-600"}>
+                      <span className={improving ? "text-green-600" : "text-red-600"}>
                         {change >= 0 ? "+" : ""}{money(change)} ({percent.toFixed(2)}%)
                       </span>
                     ) : (
