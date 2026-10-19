@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/session";
+import { toMonthKey } from "@/lib/month";
 import { CATEGORY_ICON_NAMES } from "@/lib/category-icons";
 
 export type ActionResult = { error?: string };
@@ -15,10 +16,12 @@ type CategoryPatch = Partial<{
   kind: CategoryKind;
   archived: boolean;
   excluded: boolean;
+  no_ideal: boolean;
   group_id: string | null;
   ideal_override: number | null;
   icon: string | null;
 }>;
+type RecurringPatch = Partial<{ enabled: boolean; amount: number; card_id: string | null }>;
 type CardPatch = Partial<{ name: string; color: string; archived: boolean }>;
 type GroupPatch = Partial<{ name: string; color: string }>;
 
@@ -84,6 +87,7 @@ export async function updateCategory(id: string, patch: CategoryPatch): Promise<
   if (patch.kind !== undefined) clean.kind = patch.kind === "income" ? "income" : "expense";
   if (patch.archived !== undefined) clean.archived = patch.archived;
   if (patch.excluded !== undefined) clean.excluded = patch.excluded;
+  if (patch.no_ideal !== undefined) clean.no_ideal = patch.no_ideal;
   if (patch.group_id !== undefined) clean.group_id = patch.group_id;
   if (patch.icon !== undefined) {
     if (patch.icon !== null && !ICON_NAMES.has(patch.icon)) return { error: "Invalid icon." };
@@ -117,20 +121,22 @@ export async function updateCategory(id: string, patch: CategoryPatch): Promise<
   return {};
 }
 
-export async function moveCategory(id: string, direction: -1 | 1): Promise<ActionResult> {
-  const { supabase, householdId } = await context();
-  const { data } = await supabase
-    .from("categories")
-    .select("id, sort_order")
-    .eq("household_id", householdId)
-    .order("sort_order");
-  const list = data ?? [];
-  const index = list.findIndex((row) => row.id === id);
-  const target = list[index + direction];
-  if (index < 0 || !target) return {};
+export async function reorderCategories(orderedIds: string[]): Promise<ActionResult> {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) return {};
 
-  await supabase.from("categories").update({ sort_order: target.sort_order }).eq("id", id);
-  await supabase.from("categories").update({ sort_order: list[index].sort_order }).eq("id", target.id);
+  const { supabase, householdId } = await context();
+  const { data } = await supabase.from("categories").select("id").eq("household_id", householdId);
+  const owned = new Set((data ?? []).map((row) => row.id));
+  if (orderedIds.some((id) => !owned.has(id))) return { error: "Category not found." };
+
+  for (const [index, id] of orderedIds.entries()) {
+    const { error } = await supabase
+      .from("categories")
+      .update({ sort_order: index })
+      .eq("id", id)
+      .eq("household_id", householdId);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath("/categories");
   return {};
@@ -278,20 +284,22 @@ export async function updateGroup(id: string, patch: GroupPatch): Promise<Action
   return {};
 }
 
-export async function moveGroup(id: string, direction: -1 | 1): Promise<ActionResult> {
-  const { supabase, householdId } = await context();
-  const { data } = await supabase
-    .from("category_groups")
-    .select("id, sort_order")
-    .eq("household_id", householdId)
-    .order("sort_order");
-  const list = data ?? [];
-  const index = list.findIndex((row) => row.id === id);
-  const target = list[index + direction];
-  if (index < 0 || !target) return {};
+export async function reorderGroups(orderedIds: string[]): Promise<ActionResult> {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) return {};
 
-  await supabase.from("category_groups").update({ sort_order: target.sort_order }).eq("id", id);
-  await supabase.from("category_groups").update({ sort_order: list[index].sort_order }).eq("id", target.id);
+  const { supabase, householdId } = await context();
+  const { data } = await supabase.from("category_groups").select("id").eq("household_id", householdId);
+  const owned = new Set((data ?? []).map((row) => row.id));
+  if (orderedIds.some((id) => !owned.has(id))) return { error: "Group not found." };
+
+  for (const [index, id] of orderedIds.entries()) {
+    const { error } = await supabase
+      .from("category_groups")
+      .update({ sort_order: index })
+      .eq("id", id)
+      .eq("household_id", householdId);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath("/categories");
   return {};
@@ -312,4 +320,67 @@ export async function setCategoryGroup(id: string, groupId: string | null): Prom
 
 export async function setExcluded(id: string, excluded: boolean): Promise<ActionResult> {
   return updateCategory(id, { excluded });
+}
+
+export async function setCategoryRecurring(categoryId: string, patch: RecurringPatch): Promise<ActionResult> {
+  if (!categoryId) return { error: "Category is required." };
+  if (patch.amount !== undefined && (!Number.isFinite(patch.amount) || patch.amount < 0)) {
+    return { error: "Amount must be a non-negative number." };
+  }
+
+  const { supabase, householdId } = await context();
+
+  const { data: category } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("id", categoryId)
+    .eq("household_id", householdId)
+    .maybeSingle();
+  if (!category) return { error: "Category not found." };
+
+  if (patch.card_id) {
+    const { data: card } = await supabase
+      .from("cards")
+      .select("id")
+      .eq("id", patch.card_id)
+      .eq("household_id", householdId)
+      .maybeSingle();
+    if (!card) return { error: "Payment method not found." };
+  }
+
+  const { data: existing } = await supabase
+    .from("recurring_items")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("category_id", categoryId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const update: Record<string, unknown> = {};
+  if (patch.amount !== undefined) update.amount = Math.round(patch.amount * 100) / 100;
+  if (patch.card_id !== undefined) update.card_id = patch.card_id;
+  if (patch.enabled !== undefined) update.active = patch.enabled;
+
+  if (existing) {
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase.from("recurring_items").update(update).eq("id", existing.id);
+      if (error) return { error: error.message };
+    }
+  } else if (patch.enabled !== false) {
+    const { error } = await supabase.from("recurring_items").insert({
+      household_id: householdId,
+      category_id: categoryId,
+      amount: patch.amount !== undefined ? Math.round(patch.amount * 100) / 100 : 0,
+      card_id: patch.card_id ?? null,
+      note: null,
+      start_month: toMonthKey(new Date()),
+      end_month: null,
+      active: patch.enabled ?? true,
+    });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/categories");
+  return {};
 }

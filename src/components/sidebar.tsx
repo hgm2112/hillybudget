@@ -11,7 +11,6 @@ import {
   Menu,
   Moon,
   Receipt,
-  Repeat,
   Search,
   Settings,
   Sun,
@@ -20,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "cn";
-import { money } from "@/lib/money";
+import { moneyWhole } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { BrandIcon, BrandLogo } from "@/components/brand";
 import { useTheme } from "@/components/theme-provider";
@@ -34,7 +33,6 @@ const NAV = [
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/accounts", label: "Accounts", icon: Wallet },
   { href: "/categories", label: "Categories", icon: Tags },
-  { href: "/recurring", label: "Recurring", icon: Repeat },
 ];
 
 export function Sidebar({
@@ -163,7 +161,7 @@ export function Sidebar({
                     {!isCollapsed && <span className="min-w-0 flex-1 truncate">{item.name}</span>}
                     {!isCollapsed && (
                       <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {item.balance == null ? "—" : money(item.balance)}
+                        {item.balance == null ? "—" : moneyWhole(item.balance)}
                       </span>
                     )}
                   </div>

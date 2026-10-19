@@ -11,7 +11,7 @@ Working state for hillybudget. Keep current at the end of each substantial work 
 
 ## Rebuild (approved; app rebuilt on the live schema)
 
-A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has been imported (see below). Migrations through `0008` are applied (see Database in `AGENTS.md`).
+A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has been imported (see below). Migrations through `0010` are applied (see Database in `AGENTS.md`).
 
 ### Schema (applied via `supabase/reset_and_init.sql`)
 
@@ -37,7 +37,7 @@ A clean application rebuild on a from-scratch, `ledger_entries`-based schema. Th
 
 - The old root ledger moved to **`/expenses`** (`src/app/expenses/{page,expenses-client,actions}.tsx`; component `ExpensesClient`; `revalidatePath("/expenses")`; month nav `?month=`). Root `/` now redirects to `/dashboard`.
 - New **`/dashboard`** (`src/app/dashboard/{page,dashboard-client}.tsx`): eyebrow-free `PageHeader` with a 3M/6M/12M/YTD selector, four range-based summary cards (income, expenses, net cash flow, net worth), and a 2×2 Recharts grid (spending trend area, income-vs-expenses bars, spending-by-category horizontal bars, net worth line). Data: `categories`, `monthly_category_totals`, `accounts`, `account_balances`. Net worth = latest snapshot per account (assets = liquid+retirement, liabilities = loan); the net-worth line plots **recorded months only** (no forward-fill). No Realtime. No migration needed.
-- Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Recurring, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
+- Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
 
 ### Excel import (done)
 
@@ -145,18 +145,81 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `CategoryDialog` (used by both New and Edit via `⋯ → Edit`) has an **Icon** section: search box, wrapped icon grid, and an **Auto** button to clear the override. Server actions (`addCategory`/`updateCategory`) validate the icon name against the registry.
 - Icons render in the grouped list, the flat "All regular categories" list, and the excluded list. PR #17, `5842fa3`.
 
+### Categories recurring controls (implemented)
+
+- `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`). Group headers show `spent / budget`.
+- Right column: **Spending trend** bar chart with a `3M/6M/12M/YTD` selector (reuses the dashboard `PERIODS` pattern), **Key metrics**, and a **category detail panel** for the selected category — header (icon, name, group name, group-color circle), `Spending | Ideal | Difference` stats, **Details** (name, group, type, color, icon), **Excluded from budget** switch, **Recurring expense** switch (monthly amount + card picker), **Monthly budget (optional)** switch (sets/clears `ideal_override` = trailing-average budget), and footer **View all transactions** + **Archive** + **Delete**.
+- `CategoryDetail` uses uncontrolled inputs keyed by value (no setState-in-effect), committing on blur via `setCategoryRecurring` / `updateCategory`; the inline **Type** select and **Icon** picker commit on change.
+- Removed the top-left donut/summary card and the "All regular categories" card (per the approved mockup); kept the Excluded categories card and the Manage dialog.
+- Header is a 3-zone grid (title + month / `MonthNav` centered / New category · New group · Manage). `page.tsx` defaults the selected month to the **latest recorded month** (max `monthly_category_totals` month) and builds `months` with `monthRange`.
+- New action `setCategoryRecurring(categoryId, { enabled?, amount?, card_id? })` in `categories/actions.ts`: reuses/inserts the category's active `recurring_items` row (`start_month` = current real month, `note`/`end_month` null), soft-off via `active=false`, validates amount ≥ 0 and card ownership. No schema/RLS change.
+- Removed the standalone `/recurring` page (`src/app/recurring/*`) and its sidebar nav item; recurring is managed on `/categories`.
+- `/expenses` now accepts `?category=<id>` (`page.tsx` → `focusCategory`) which pre-expands and scrolls that category into view; used by "View all transactions".
+- New `src/components/ui/switch.tsx` (base-ui Switch). `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Categories row menu removed → inline detail + drag reorder (implemented)
+
+- Removed the per-row `⋯` menu on `/categories`. Its actions now live in the detail panel: **Move to group** = the inline **Group** select; **Edit** (Type/Color/Icon) = inline **Type** select, **Color** swatches + custom picker, and **Icon** search/grid/`Auto` (reusing the `CATEGORY_ICON_NAMES` registry); **Exclude from budget** = an **Excluded from budget** switch; **Archive** = an **Archive** button in the footer; **Delete** unchanged. `CategoryDialog` is now a create-only form (**New category**: name/type/color/icon; the group/budget fields were dropped as they were ignored on create).
+- Replaced Move up/down with **drag-to-reorder** (native HTML5 DnD, desktop-only, no new dependency). Category rows reorder **within their own group**; group headers reorder the groups. A `GripVertical` handle appears on row/group hover (`opacity-0 group-hover:opacity-100`); the dragged item dims and the drop target gets a primary ring. Cross-group drops are ignored (move groups via the panel's Group select).
+- New actions in `categories/actions.ts`: `reorderCategories(orderedIds)` and `reorderGroups(orderedIds)` — validate household ownership, assign `sort_order = index`, `revalidatePath("/categories")`. Removed the now-unused `moveCategory` and `moveGroup`.
+- `ManageDialog` lost its group **Move up/down** arrow buttons (drag on the main list replaces them).
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Per-category "no ideal" (implemented, migration applied)
+
+- `supabase/migrations/0009_category_no_ideal.sql` **is applied** — adds `categories.no_ideal boolean not null default false` (no RLS/grant/Realtime changes).
+- **Ideal** = the auto trailing-average from `ideal_category_amount` (window set in Manage → "Ideal spending window"); the previous "Monthly budget (optional)" switch was really a **manual override** of it, so it is now labelled **Custom ideal**.
+- The detail panel's controls are a compact equal-thirds segmented control (`grid grid-cols-3 divide-x rounded-lg border`) — `Recurring expense │ Custom ideal │ Ideal` — each expanding its content beneath the row (Recurring → amount + card; Custom ideal → amount input). The three are parallel toggles.
+- Groups-section polish: removed the tinted background on the "Regular categories / Spending / Ideal" header; the per-group bands ("House", "Utilities") are now `rounded-lg`; the recurring-off `Repeat` icon is fainter (`text-muted-foreground/20`). Columns are reversed to **Ideal (left) · Spending (right)** in the header, group totals, rows, and the detail panel stats (Ideal · Spending · Difference).
+- `Ideal` toggle (default on) is the **no-ideal** control: turning it off sets `no_ideal = true` and clears any custom amount (`ideal_override = null`); turning it on restores the auto/ideal. Turning **Custom ideal** on forces `no_ideal = false`. When no-ideal, the Custom ideal toggle is disabled and the amount input is hidden.
+- No-ideal behaviour: the Ideal **column** on the row renders blank; in the panel the **Ideal** and **Difference** stats show `—` (Difference no longer implied); the category still appears in Regular categories and its spending still counts. Group ideal totals are unaffected (forced ideal = 0). `/expenses` already hides the ideal label at 0, so no client change there.
+- `categories/page.tsx` and `expenses/page.tsx` select `no_ideal` and force `ideal = 0` (and `p_override = null`) for no-ideal categories; `updateCategory` accepts `no_ideal`.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Collapsible groups + compact detail section (implemented)
+
+- Group headers in the **Regular categories** card are now collapsible: clicking a header toggles its rows (`collapsedGroups` `Set` in `CategoriesClient`, local component state only — default expanded, resets on reload). A `ChevronDown`/`ChevronRight` precedes the group color dot; the drag grip calls `stopPropagation` so reordering never toggles. Totals/badge stay in the header.
+- The detail panel's **Details** section is more compact: Row 1 is a `grid sm:grid-cols-3` (**Category name · Group · Type**); Row 2 is a `grid sm:grid-cols-2` (**Color · Icon**), side by side.
+- The **Icon** cell shows a curated preview row (`PREVIEW_ICONS = home, car, utensils, shoppingBag, heartPulse, zap, wifi, wallet`); if the current icon isn't in that set it is prepended so the selection stays visible. The last item is a chevron button (`showAllIcons`) that expands the existing search input, `Auto` button, and full `CATEGORY_ICON_NAMES` grid.
+- Only `categories-client.tsx` changed (UI-only, no schema/DB change). `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Reporting/display fixes (implemented)
+
+- `/dashboard` charts no longer show an empty current calendar month. `dashboard-client.tsx` splits the window: `flowMonths` (ends at the latest **ledger** month) drives spending-trend, income-vs-expenses, spending-by-category, and the Income/Expenses summaries; `netMonths` (ends at the latest **balance** month) drives the net-worth chart. `accounts/accounts-client.tsx` balance-change color is direction-aware (`improving`): asset increase = green, loan decrease = green.
+- Sidebar section label for `loan` is now **Loan** (`app-sidebar.tsx`).
+- Sidebar balances and all `/accounts` amounts use `moneyWhole` (whole dollars, no cents); the per-row percent stays at 2 decimals.
+- `/stats` now defaults `selectedMonth` to the latest recorded entry month (`stats/page.tsx`) instead of the current month.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Income corrections + default income (migration applied)
+
+- `supabase/migrations/0010_income_fixes.sql` **is applied** (data-only; no schema/RLS/policy change). It: reclassifies `Sign Up Bonuses` from expense → income and flips its entry to `+400`; flips the 11 negative `Ebay Earnings` entries to positive (`abs`); deletes 3 October-2026 test Groceries entries (by id); creates one active `recurring_items` row for the `Income` category (`7500`, `start_month` 2025-01-01); and sets every `Income` ledger entry to `7500`, linking them to that recurring item so "Add recurring items" dedupes and fills `7500` for new months.
+- Result: default income is **$7,500/month** from 2025-01 onward; eBay earnings and sign-up bonuses add on top (e.g. 2026-02 income = 7500 + 8008.75 + 400 = 15,908.75). Change the base by editing the `Income` recurring item.
+- `src/lib/import/normalize.ts` now stores income-category amounts as positive (`Math.abs`) so re-imports don't reintroduce negatives.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Session wrap (2026-10-18)
+
+- Branch `feat/categories-recurring-controls` pushed to origin; **PR #20** open against `main` (https://github.com/hgm2112/hillybudget/pull/20), MERGEABLE, not yet merged. Vercel deploys only from `main`.
+- 11 commits this session: `ed14311` recurring controls + master-detail; `16b463c` inline detail + drag reorder + no-ideal; `b9d26d4` equal-thirds toggle row + groups polish; `a48a457` swap Ideal/Spending; `ced6273` collapsible groups + compact detail; `2c43321` loan-decrease green; `7ed567a` sidebar "Loan"; `a011289` whole-dollar sidebar/accounts; `0473980` dashboard/stats last-recorded window; `909301f` income signs + default $7500 (migration 0010); `2a13b06` dashboard flow/net windows.
+- Migrations `0001`–`0010` applied (local = remote); head `0010_income_fixes.sql`.
+- Working tree clean except the untracked root SVGs.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
-- Migrations `0001`–`0008` are applied to the live project (`supabase migration list`: local = remote).
+- Migrations `0001`–`0010` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 
 - **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
+- Branch `feat/categories-recurring-controls` is pushed but unmerged; PR #20 pending.
 
 ## Next action
 
+- **Merge PR #20 (squash) to `main`** so Vercel deploys from `main` (branch `feat/categories-recurring-controls`).
 - Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
-- Optionally clean up the untracked root SVG duplicates and add the `⋯ → Edit → Icon` picker to any other surfaces that show category icons.
+- Optionally clean up the untracked root SVG duplicates and add the inline Icon picker to any other surfaces that show category icons.
