@@ -148,3 +148,11 @@
 .dark .group-tint {
   background-color: color-mix(in oklab, var(--group-color) 45%, transparent);
 }
+
+.recharts-default-tooltip {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--border) !important;
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+}
