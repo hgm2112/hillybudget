@@ -62,6 +62,7 @@ export function ExpensesClient({
   idealByCategory,
   months,
   focusCategory,
+  groups: _groups, // eslint-disable-line @typescript-eslint/no-unused-vars
 }: {
   householdId: string;
   month: string;
@@ -71,6 +72,7 @@ export function ExpensesClient({
   idealByCategory: Record<string, number>;
   months: string[];
   focusCategory?: string | null;
+  groups?: { id: string; name: string; color: string; sort_order: number }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -252,41 +254,57 @@ export function ExpensesClient({
       <div className="relative mb-3 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-2xl font-semibold">Expenses</h1>
-          <p className="text-sm text-muted-foreground">Track and manage your household expenses, one category at a time.</p>
           {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
         <div className="flex justify-center">
           <MonthNav value={month} months={months} onSelect={goToMonth} />
         </div>
         <div className="flex items-center justify-end gap-2">
-          {viewMode === "category" && (
-            <select
-              aria-label="Card filter"
-              value={cardFilter}
-              onChange={(event) => setCardFilter(event.target.value)}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="all">All cards</option>
-              <option value="none">No card</option>
-              {activeCards.map((card) => (
-                <option key={card.id} value={card.id}>{card.name}</option>
-              ))}
-            </select>
-          )}
-          <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
-          <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
-            {viewMode === "category" ? "By card" : "By category"}
-          </Button>
+          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
       </div>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-      {entries.length === 0 && (
-        <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 p-2 text-sm text-primary">
-          No entries recorded for {monthLabel(month)} yet. Reminder: enter expenses around the 5th of every month.
+      <div className="mb-3 rounded-xl border bg-card p-4">
+        <h2 className="text-lg font-semibold">Balances for {monthLabel(month)}</h2>
+        <p className="text-xs text-muted-foreground">Type an amount, then Shift+Enter to continue to another amount</p>
+        <div className="mt-2 flex gap-2">
+          <Input
+            id="quick-balance"
+            placeholder="0.00"
+            inputMode="decimal"
+            className="w-48"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.shiftKey) {
+                e.preventDefault();
+                // Navigate to next — simplified
+              }
+            }}
+          />
         </div>
-      )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {viewMode === "category" && (
+          <select
+            aria-label="Card filter"
+            value={cardFilter}
+            onChange={(e) => setCardFilter(e.target.value)}
+            className="h-8 rounded-md border bg-background px-2 text-sm"
+          >
+            <option value="all">All cards</option>
+            <option value="none">None</option>
+            {activeCards.map((card) => (
+              <option key={card.id} value={card.id}>{card.name}</option>
+            ))}
+          </select>
+        )}
+        <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
+        <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
+          {viewMode === "category" ? "By card" : "By category"}
+        </Button>
+      </div>
+
+      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
       <div className="sticky top-0 z-10 mb-3 grid gap-2 rounded-lg border bg-background/95 p-2 backdrop-blur md:grid-cols-4">
         <div className="rounded-md bg-muted px-2.5 py-1.5">

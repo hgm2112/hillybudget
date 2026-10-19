@@ -20,6 +20,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     { data: entries },
     { data: firstEntry },
     { data: lastEntry },
+    { data: groups },
   ] = await Promise.all([
     supabase
       .from("categories")
@@ -27,6 +28,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       .eq("household_id", household_id)
       .order("sort_order"),
     supabase.from("cards").select("id, name, color, archived").eq("household_id", household_id).order("sort_order"),
+    supabase.from("category_groups").select("id, name, color, sort_order").eq("household_id", household_id).order("sort_order"),
     supabase.from("household_settings").select("ideal_window").eq("household_id", household_id).maybeSingle(),
     supabase
       .from("ledger_entries")
@@ -80,6 +82,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         idealByCategory={idealByCategory}
         months={months}
         focusCategory={focusCategory}
+        groups={(groups ?? []).map((g) => ({ id: g.id, name: g.name, color: g.color, sort_order: g.sort_order }))}
         entries={(entries ?? []).map((entry) => ({ ...entry, amount: Number(entry.amount) }))}
       />
     </main>
