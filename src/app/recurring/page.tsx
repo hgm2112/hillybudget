@@ -25,7 +25,7 @@ export default async function RecurringPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
+    <main className="min-h-screen space-y-6 p-4 md:p-8">
       <RecurringClient
         categories={categories ?? []}
         cards={cards ?? []}

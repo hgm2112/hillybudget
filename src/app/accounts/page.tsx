@@ -46,7 +46,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const numeric = (value: unknown) => (value === null || value === undefined ? null : Number(value));
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
+    <main className="min-h-screen space-y-6 p-4 md:p-8">
       <AccountsClient
         month={month}
         accounts={(accounts ?? []).map((account) => ({
