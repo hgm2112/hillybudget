@@ -11,7 +11,7 @@ Working state for hillybudget. Keep current at the end of each substantial work 
 
 ## Rebuild (approved; app rebuilt on the live schema)
 
-A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has been imported (see below). Migrations through `0008` are applied (see Database in `AGENTS.md`).
+A clean application rebuild on a from-scratch, `ledger_entries`-based schema. The database reset has been applied to the correct project; the new schema, RLS policies, and auth are live. The app was rebuilt server-first (RSC + Server Actions) page by page; the cleaned `Expenses.xlsx` has been imported (see below). Migrations through `0010` are applied (see Database in `AGENTS.md`).
 
 ### Schema (applied via `supabase/reset_and_init.sql`)
 
@@ -198,6 +198,14 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `src/lib/import/normalize.ts` now stores income-category amounts as positive (`Math.abs`) so re-imports don't reintroduce negatives.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Session wrap (2026-10-18)
+
+- Branch `feat/categories-recurring-controls` pushed to origin; **PR #20** open against `main` (https://github.com/hgm2112/hillybudget/pull/20), MERGEABLE, not yet merged. Vercel deploys only from `main`.
+- 11 commits this session: `ed14311` recurring controls + master-detail; `16b463c` inline detail + drag reorder + no-ideal; `b9d26d4` equal-thirds toggle row + groups polish; `a48a457` swap Ideal/Spending; `ced6273` collapsible groups + compact detail; `2c43321` loan-decrease green; `7ed567a` sidebar "Loan"; `a011289` whole-dollar sidebar/accounts; `0473980` dashboard/stats last-recorded window; `909301f` income signs + default $7500 (migration 0010); `2a13b06` dashboard flow/net windows.
+- Migrations `0001`–`0010` applied (local = remote); head `0010_income_fixes.sql`.
+- Working tree clean except the untracked root SVGs.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
@@ -208,8 +216,10 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
+- Branch `feat/categories-recurring-controls` is pushed but unmerged; PR #20 pending.
 
 ## Next action
 
+- **Merge PR #20 (squash) to `main`** so Vercel deploys from `main` (branch `feat/categories-recurring-controls`).
 - Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
 - Optionally clean up the untracked root SVG duplicates and add the inline Icon picker to any other surfaces that show category icons.

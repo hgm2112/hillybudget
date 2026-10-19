@@ -13,6 +13,7 @@ Rules:
 - Fonts: `--font-body` (Louis George Café) and `--font-display` (Comfortaa) ship only 400 and 700 faces. There is no 500/600 face, so `font-medium`/`font-semibold` do not render a distinct weight — use `font-bold` for emphasis.
 - Category icons: use `categoryIcon({ name, icon })` from `src/lib/category-icons.ts`. Per-category overrides are stored in `categories.icon`; add any new icon to the `CATEGORY_ICONS` registry so it is selectable and passes server-side validation.
 - Group-header tint: `.group-tint` in `globals.css` derives from a per-element `--group-color` CSS variable (via inline `style`) and `color-mix`; keep the light/dark percentages distinct for contrast.
+- Income: ledger entries are stored as positive amounts; the importer normalizes income categories to positive. The household's default monthly income is the recurring `Income` item (edit it to change the $7,500 base).
 
 Process:
 - Make small, focused changes. Avoid unrelated refactors and drive-by edits.
@@ -32,6 +33,6 @@ Git workflow:
 - Agents: make a commit as part of finishing a piece of work, and ask before leaving large uncommitted changes.
 
 Database:
-- Migrations `0001`–`0008` are applied to the live project (`supabase migration list` shows local = remote). Head is `0008_category_icons.sql`.
+- Migrations `0001`–`0010` are applied to the live project (`supabase migration list` shows local = remote). Head is `0010_income_fixes.sql`.
 - Apply pending migrations with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`; verify with `npx supabase migration list --db-url "$SUPABASE_DB_URL"`.
-- Schema/column/policy/auth changes still require explicit approval; data migrations (e.g. `0007` card colors, `0006` brand colors) were approved individually.
+- Schema/column/policy/auth changes still require explicit approval; data migrations (e.g. `0007` card colors, `0006` brand colors, `0010` income fixes) were approved individually.
