@@ -154,9 +154,10 @@ export function normalizeImportFile(sourceFileName: string, buffer: Buffer): Imp
       cards.set(cardName, { name: cardName, color: "#6b7280" });
     }
 
+    const kind = categoryName.toLowerCase().endsWith("earnings") ? "income" : "expense";
     categories.set(categoryName, {
       name: categoryName,
-      kind: categoryName.toLowerCase().endsWith("earnings") ? "income" : "expense",
+      kind,
       color: EXPENSE_PALETTE[categoryName] ?? "#6b7280",
     });
 
@@ -164,7 +165,7 @@ export function normalizeImportFile(sourceFileName: string, buffer: Buffer): Imp
     for (const [column, month] of Object.entries(EXPENSE_MONTHS)) {
       const amount = parseDecimal(row[column], `Expenses ${categoryName} ${month.slice(0, 7)}`, errors);
       if (amount === null) continue;
-      entries.push({ month, category: categoryName, card: cardName, amount });
+      entries.push({ month, category: categoryName, card: cardName, amount: kind === "income" ? Math.abs(amount) : amount });
       entriesByMonth[month] = (entriesByMonth[month] ?? 0) + 1;
       monthCells += 1;
     }
