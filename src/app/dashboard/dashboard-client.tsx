@@ -24,8 +24,8 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "cn";
-import { money } from "@/lib/money";
-import { monthLabel, shiftMonth, toMonthKey } from "@/lib/month";
+import { money, moneyCompact } from "@/lib/money";
+import { monthLabel, monthRange, shiftMonth, toMonthKey } from "@/lib/month";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 
@@ -40,6 +40,7 @@ const PERIODS = [
   { key: "6M", months: 6 },
   { key: "12M", months: 12 },
   { key: "YTD", months: 0 },
+  { key: "LIFETIME", months: 0 },
 ] as const;
 type Period = (typeof PERIODS)[number]["key"];
 
@@ -66,7 +67,7 @@ function rangeLabel(months: string[]) {
   return `${first} – ${last}`;
 }
 
-function windowMonths(period: Period, anchor: string) {
+function windowMonths(period: Period, anchor: string, floor: string) {
   if (period === "YTD") {
     const months: string[] = [];
     let cursor = `${anchor.slice(0, 4)}-01-01`;
@@ -75,6 +76,9 @@ function windowMonths(period: Period, anchor: string) {
       cursor = shiftMonth(cursor, 1);
     }
     return months;
+  }
+  if (period === "LIFETIME") {
+    return floor && floor < anchor ? monthRange(floor, anchor) : [anchor];
   }
   const count = PERIODS.find((entry) => entry.key === period)?.months ?? 12;
   return Array.from({ length: count }, (_, index) => shiftMonth(anchor, index - (count - 1)));
@@ -105,8 +109,20 @@ export function DashboardClient({
     return latest || toMonthKey(new Date());
   }, [balances]);
 
-  const flowMonths = useMemo(() => windowMonths(period, flowAnchor), [period, flowAnchor]);
-  const netMonths = useMemo(() => windowMonths(period, netAnchor), [period, netAnchor]);
+  const flowFloor = useMemo(() => {
+    let earliest = "";
+    for (const row of totals) if (!earliest || row.month < earliest) earliest = row.month;
+    return earliest;
+  }, [totals]);
+
+  const netFloor = useMemo(() => {
+    let earliest = "";
+    for (const balance of balances) if (!earliest || balance.month < earliest) earliest = balance.month;
+    return earliest;
+  }, [balances]);
+
+  const flowMonths = useMemo(() => windowMonths(period, flowAnchor, flowFloor), [period, flowAnchor, flowFloor]);
+  const netMonths = useMemo(() => windowMonths(period, netAnchor, netFloor), [period, netAnchor, netFloor]);
 
   const kindById = useMemo(() => new Map(categories.map((category) => [category.id, category.kind])), [categories]);
   const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
@@ -183,18 +199,24 @@ export function DashboardClient({
   }, [latestByAccount, accountKind]);
 
   const netWorthSeries = useMemo(() => {
-    const inRange = new Set(netMonths);
-    const byMonth = new Map<string, number>();
-    for (const balance of balances) {
-      if (!inRange.has(balance.month)) continue;
-      const kind = accountKind.get(balance.account_id);
-      if (!kind) continue;
-      const delta = kind === "loan" ? -balance.balance : balance.balance;
-      byMonth.set(balance.month, (byMonth.get(balance.month) ?? 0) + delta);
+    const ordered = [...balances].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
+    const latest = new Map<string, number>();
+    const series: { key: string; label: string; net: number }[] = [];
+    let index = 0;
+    for (const month of netMonths) {
+      while (index < ordered.length && ordered[index].month <= month) {
+        const balance = ordered[index];
+        index += 1;
+        const kind = accountKind.get(balance.account_id);
+        if (!kind) continue;
+        latest.set(balance.account_id, kind === "loan" ? -balance.balance : balance.balance);
+      }
+      if (latest.size === 0) continue;
+      let net = 0;
+      for (const value of latest.values()) net += value;
+      series.push({ key: month, label: shortLabel(month), net });
     }
-    return netMonths
-      .filter((month) => byMonth.has(month))
-      .map((month) => ({ key: month, label: shortLabel(month), net: byMonth.get(month) ?? 0 }));
+    return series;
   }, [balances, netMonths, accountKind]);
 
   return (
@@ -210,7 +232,7 @@ export function DashboardClient({
               type="button"
               onClick={() => setPeriod(entry.key)}
               className={cn(
-                "rounded-md px-3 py-1 text-sm transition-colors",
+                "rounded-md px-2 py-1 text-sm transition-colors",
                 period === entry.key
                   ? "bg-background font-medium text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -266,7 +288,7 @@ export function DashboardClient({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={56} tickFormatter={(value) => money(Number(value))} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} width={48} tickFormatter={(value) => moneyCompact(Number(value))} />
                 <Tooltip formatter={(value) => money(Number(value))} labelFormatter={(_, payload) => monthOf(payload)} />
                 <Area type="monotone" dataKey="expense" stroke={EXPENSE} strokeWidth={2} fill="url(#spendingFill)" />
               </AreaChart>
@@ -278,7 +300,7 @@ export function DashboardClient({
               <BarChart data={compareData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={56} tickFormatter={(value) => money(Number(value))} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} width={48} tickFormatter={(value) => moneyCompact(Number(value))} />
                 <Tooltip formatter={(value) => money(Number(value))} labelFormatter={(_, payload) => monthOf(payload)} />
                 <Bar dataKey="income" fill={INCOME} radius={[3, 3, 0, 0]} />
                 <Bar dataKey="expense" fill={EXPENSE} radius={[3, 3, 0, 0]} />
@@ -291,8 +313,8 @@ export function DashboardClient({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={categoryData} layout="vertical" margin={{ left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} tickFormatter={(value) => money(Number(value))} />
-                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} fontSize={12} width={110} />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} tickFormatter={(value) => moneyCompact(Number(value))} />
+                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} fontSize={12} width={110} interval={0} />
                   <Tooltip formatter={(value) => money(Number(value))} />
                   <Bar dataKey="value" radius={[0, 3, 3, 0]}>
                     {categoryData.map((row) => (
@@ -312,7 +334,7 @@ export function DashboardClient({
                 <LineChart data={netWorthSeries}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} width={56} tickFormatter={(value) => money(Number(value))} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} width={48} tickFormatter={(value) => moneyCompact(Number(value))} />
                   <Tooltip formatter={(value) => money(Number(value))} labelFormatter={(_, payload) => monthOf(payload)} />
                   <Line type="monotone" dataKey="net" stroke={ACCENT} strokeWidth={2} dot={false} />
                 </LineChart>

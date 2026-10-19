@@ -10,6 +10,15 @@ export function moneyWhole(value: number) {
   }).format(value);
 }
 
+export function moneyCompact(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function parseAmountExpression(input: string) {
   const parts = input
     .split("+")
