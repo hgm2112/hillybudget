@@ -70,7 +70,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   });
 
   return (
-    <main className="mx-auto max-w-7xl p-4 md:p-8">
+    <main className="min-h-screen p-4 md:p-8">
       <ExpensesClient
         householdId={household_id}
         month={month}
