@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { moneyWhole } from "@/lib/money";
 import { monthLabel, monthName } from "@/lib/month";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addAccount, archiveAccount, clearBalances, deleteAccount, saveBalances, skipMonth, unarchiveAccount, unskipMonth, updateAccount, type ActionResult, type AccountKind } from "./actions";
+import { addAccount, archiveAccount, clearBalances, deleteAccount, saveBalances, skipMonth, unarchiveAccount, unskipMonth, type ActionResult, type AccountKind } from "./actions";
 import { cn } from "cn";
 
 type Account = {
@@ -19,10 +19,6 @@ type Account = {
   kind: AccountKind;
   color: string;
   sort_order: number;
-  original_amount: number | null;
-  interest_rate: number | null;
-  monthly_payment: number | null;
-  start_date: string | null;
 };
 
 type Balance = { id: string; account_id: string; month: string; balance: number };
@@ -61,10 +57,6 @@ export function AccountsClient({
     name: "",
     kind: "liquid" as AccountKind,
     color: PALETTE[0],
-    original_amount: "",
-    interest_rate: "",
-    monthly_payment: "",
-    start_date: "",
   });
 
   const isSkipped = skipped.includes(month);
@@ -207,10 +199,6 @@ export function AccountsClient({
         name: newAccount.name,
         kind: newAccount.kind,
         color: newAccount.color,
-        original_amount: newAccount.original_amount === "" ? null : Number(newAccount.original_amount),
-        interest_rate: newAccount.interest_rate === "" ? null : Number(newAccount.interest_rate),
-        monthly_payment: newAccount.monthly_payment === "" ? null : Number(newAccount.monthly_payment),
-        start_date: newAccount.start_date || null,
       })
     );
     if (ok) {
@@ -218,28 +206,8 @@ export function AccountsClient({
         name: "",
         kind: "liquid",
         color: PALETTE[(accounts.length + 1) % PALETTE.length],
-        original_amount: "",
-        interest_rate: "",
-        monthly_payment: "",
-        start_date: "",
       });
     }
-  }
-
-  function projectedPayoff(account: Account) {
-    const principal = currentValueFor(account.id) ?? 0;
-    if (!account.monthly_payment || !account.interest_rate || !Number.isFinite(principal) || principal <= 0) return null;
-    const rate = account.interest_rate / 100 / 12;
-    let balance = principal;
-    let months = 0;
-    while (balance > 0 && months < 1200) {
-      balance += balance * rate - account.monthly_payment;
-      months += 1;
-    }
-    if (balance > 0) return null;
-    const date = new Date(month + "T00:00:00Z");
-    date.setUTCMonth(date.getUTCMonth() + months);
-    return date.toISOString().slice(0, 7);
   }
 
   const liquidTotal = monthTotal("liquid");
@@ -326,48 +294,56 @@ export function AccountsClient({
             <span className="text-sm text-muted-foreground">Enter one balance per account</span>
           </div>
           <div className={cn("space-y-2", isSkipped && "opacity-40")}>
-            {sortedVisible.map((account) => {
-              const current = drafts[account.id] ?? "";
-              const previousBalance = balanceFor(account.id, prevMonth ?? "")?.balance ?? null;
-              const value = currentValueFor(account.id);
-              const change = value !== null && previousBalance !== null ? value - previousBalance : null;
-              const percent = change !== null && previousBalance ? (change / previousBalance) * 100 : 0;
-              const improving = change !== null && (account.kind === "loan" ? change <= 0 : change >= 0);
-              return (
-                <div key={account.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: account.color }} />
-                    <span className="font-medium">{account.name}</span>
-                    <Badge variant="secondary">{account.kind}</Badge>
-                    {isArchived(account.id) && <Badge>archived</Badge>}
-                  </div>
-                  <Input
-                    value={current}
-                    onChange={(e) => setDrafts((state) => ({ ...state, [account.id]: e.target.value }))}
-                    placeholder={isSkipped ? "" : previousBalance ? String(previousBalance) : "0.00"}
-                    inputMode="decimal"
-                    disabled={isSkipped}
-                    className="tabular-nums"
-                  />
-                  <div className="text-sm tabular-nums">
-                    {!isSkipped && change !== null ? (
-                      <span className={improving ? "text-green-600" : "text-red-600"}>
-                        {change >= 0 ? "+" : ""}{moneyWhole(change)} ({percent.toFixed(2)}%)
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" disabled={current.trim() === ""} onClick={() => saveBalance(account.id)}>Save</Button>
-                    <Button size="sm" variant="outline" onClick={() => run(isArchived(account.id) ? unarchiveAccount(account.id, month) : archiveAccount(account.id, month))}>
-                      {isArchived(account.id) ? "Unarchive" : "Archive"}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => run(deleteAccount(account.id))}>Delete</Button>
-                  </div>
-                </div>
-              );
-            })}
+            {(["liquid", "retirement", "loan"] as AccountKind[])
+              .map((kind) => sortedVisible.filter((account) => account.kind === kind))
+              .filter((group) => group.length > 0)
+              .map((group, index) => (
+                <Fragment key={group[0].kind}>
+                  {index > 0 && <div className="border-t border-border" />}
+                  {group.map((account) => {
+                    const current = drafts[account.id] ?? "";
+                    const previousBalance = balanceFor(account.id, prevMonth ?? "")?.balance ?? null;
+                    const value = currentValueFor(account.id);
+                    const change = value !== null && previousBalance !== null ? value - previousBalance : null;
+                    const percent = change !== null && previousBalance ? (change / previousBalance) * 100 : 0;
+                    const improving = change !== null && (account.kind === "loan" ? change <= 0 : change >= 0);
+                    return (
+                      <div key={account.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: account.color }} />
+                          <span className="font-medium">{account.name}</span>
+                          <Badge variant="secondary">{account.kind}</Badge>
+                          {isArchived(account.id) && <Badge>archived</Badge>}
+                        </div>
+                        <Input
+                          value={current}
+                          onChange={(e) => setDrafts((state) => ({ ...state, [account.id]: e.target.value }))}
+                          placeholder={isSkipped ? "" : previousBalance ? String(previousBalance) : "0.00"}
+                          inputMode="decimal"
+                          disabled={isSkipped}
+                          className="tabular-nums"
+                        />
+                        <div className="text-sm tabular-nums">
+                          {!isSkipped && change !== null ? (
+                            <span className={improving ? "text-green-600" : "text-red-600"}>
+                              {change >= 0 ? "+" : ""}{moneyWhole(change)} ({percent.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" disabled={current.trim() === ""} onClick={() => saveBalance(account.id)}>Save</Button>
+                          <Button size="sm" variant="outline" onClick={() => run(isArchived(account.id) ? unarchiveAccount(account.id, month) : archiveAccount(account.id, month))}>
+                            {isArchived(account.id) ? "Unarchive" : "Archive"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => run(deleteAccount(account.id))}>Delete</Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Fragment>
+              ))}
           </div>
           {isSkipped && (
             <div className="absolute inset-0 grid place-items-center">
@@ -379,64 +355,6 @@ export function AccountsClient({
           )}
         </CardContent>
       </Card>
-
-      <div inert={isSkipped} className={cn("space-y-6", isSkipped && "opacity-40")}>
-      {sortedVisible.filter((account) => account.kind === "loan").map((account) => {
-        const current = currentValueFor(account.id) ?? 0;
-        const original = account.original_amount ?? 0;
-        const principalPaid = original > 0 ? original - (Number.isFinite(current) ? current : 0) : null;
-        const percentPaid = original > 0 ? ((original - (Number.isFinite(current) ? current : 0)) / original) * 100 : null;
-        const payoff = projectedPayoff(account);
-        return (
-          <Card key={`loan-${account.id}`}>
-            <CardContent className="p-4">
-              <h2 className="text-lg font-semibold">{account.name} (loan)</h2>
-              <div className="mt-2 grid gap-2 md:grid-cols-4">
-                <div><span className="text-xs text-muted-foreground">Remaining</span><div>{moneyWhole(Number.isFinite(current) ? current : 0)}</div></div>
-                <div><span className="text-xs text-muted-foreground">Original</span><div>{original ? moneyWhole(original) : "-"}</div></div>
-                <div><span className="text-xs text-muted-foreground">Principal paid</span><div>{principalPaid !== null ? moneyWhole(principalPaid) : "-"}</div></div>
-                <div><span className="text-xs text-muted-foreground">Percent paid</span><div>{percentPaid !== null ? `${percentPaid.toFixed(2)}%` : "-"}</div></div>
-              </div>
-              {payoff && <p className="mt-2 text-sm text-muted-foreground">Projected payoff: {payoff}</p>}
-              <div className="mt-3 grid gap-2 md:grid-cols-4">
-                <div>
-                  <Label>Original amount</Label>
-                  <Input
-                    defaultValue={account.original_amount ?? ""}
-                    onBlur={(e) => run(updateAccount(account.id, { original_amount: e.target.value === "" ? null : Number(e.target.value) }))}
-                    className="tabular-nums"
-                  />
-                </div>
-                <div>
-                  <Label>Interest rate (%)</Label>
-                  <Input
-                    defaultValue={account.interest_rate ?? ""}
-                    onBlur={(e) => run(updateAccount(account.id, { interest_rate: e.target.value === "" ? null : Number(e.target.value) }))}
-                    className="tabular-nums"
-                  />
-                </div>
-                <div>
-                  <Label>Monthly payment</Label>
-                  <Input
-                    defaultValue={account.monthly_payment ?? ""}
-                    onBlur={(e) => run(updateAccount(account.id, { monthly_payment: e.target.value === "" ? null : Number(e.target.value) }))}
-                    className="tabular-nums"
-                  />
-                </div>
-                <div>
-                  <Label>Start date</Label>
-                  <Input
-                    type="date"
-                    defaultValue={account.start_date ?? ""}
-                    onBlur={(e) => run(updateAccount(account.id, { start_date: e.target.value || null }))}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-      </div>
 
       <div inert={isSkipped} className={cn(isSkipped && "opacity-40")}>
       <Card>
@@ -467,14 +385,6 @@ export function AccountsClient({
               <Label>Order</Label>
               <Input value={String(accounts.length)} disabled />
             </div>
-            {newAccount.kind === "loan" && (
-              <>
-                <div><Label>Original amount</Label><Input value={newAccount.original_amount} onChange={(e) => setNewAccount((state) => ({ ...state, original_amount: e.target.value }))} className="tabular-nums" /></div>
-                <div><Label>Interest rate (%)</Label><Input value={newAccount.interest_rate} onChange={(e) => setNewAccount((state) => ({ ...state, interest_rate: e.target.value }))} className="tabular-nums" /></div>
-                <div><Label>Monthly payment</Label><Input value={newAccount.monthly_payment} onChange={(e) => setNewAccount((state) => ({ ...state, monthly_payment: e.target.value }))} className="tabular-nums" /></div>
-                <div><Label>Start date</Label><Input type="date" value={newAccount.start_date} onChange={(e) => setNewAccount((state) => ({ ...state, start_date: e.target.value }))} /></div>
-              </>
-            )}
             <div className="md:col-span-4"><Button type="submit">Add account</Button></div>
           </form>
         </CardContent>
