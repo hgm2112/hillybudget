@@ -439,11 +439,11 @@ export function AccountsClient({
         );
       }
       return (
-        <div className="flex items-center justify-start gap-2">
-          <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
+        <div className="relative w-[62%] mx-auto">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${payoff.percent}%`, backgroundColor: GROUP_COLORS.loan }} />
           </div>
-          <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+          <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
             {Math.round(payoff.percent)}% paid off · {moneyWhole(payoff.paid)}
           </span>
         </div>
@@ -453,11 +453,11 @@ export function AccountsClient({
     const share = value !== null ? sharePercent(value, group.total) : null;
     if (!group.multi || share === null) return null;
     return (
-      <div className="flex items-center justify-center gap-2">
-        <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
+      <div className="relative w-[62%] mx-auto">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: GROUP_COLORS[account.kind] }} />
         </div>
-        <span className="w-9 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">{Math.round(share)}%</span>
+        <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">{Math.round(share)}%</span>
       </div>
     );
   }
@@ -626,7 +626,7 @@ export function AccountsClient({
         ) : (
           <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
             {groups.map((group) => (
-              <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_auto] md:gap-x-5 md:px-4">
+              <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_13rem] md:gap-x-5 md:px-4">
                 <div className="flex items-center gap-5 px-4 py-1.5 md:col-span-full md:grid md:grid-cols-subgrid md:px-0 md:gap-y-0">
                   <div className="flex items-center gap-3 md:col-start-1">
                     <span
