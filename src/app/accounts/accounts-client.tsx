@@ -427,7 +427,7 @@ export function AccountsClient({
       const payoff = payoffInfo(currentValue(account.id) ?? 0, account.original_amount);
       if (!payoff) {
         return (
-          <div className="flex justify-center">
+          <div className="flex justify-start">
             <button
               type="button"
               className="text-xs text-primary underline-offset-2 hover:underline"
@@ -439,7 +439,7 @@ export function AccountsClient({
         );
       }
       return (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-start gap-2">
           <div className="h-1.5 w-full max-w-[14rem] flex-1 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${payoff.percent}%`, backgroundColor: GROUP_COLORS.loan }} />
           </div>
@@ -639,7 +639,7 @@ export function AccountsClient({
                       {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
                     </span>
                   </div>
-                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-center">
+                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-start">
                     <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
                     {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
                   </div>
