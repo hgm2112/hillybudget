@@ -4,7 +4,7 @@ import type { HouseholdMembership } from "@/lib/household";
 import { Sidebar, type SidebarSection } from "@/components/sidebar";
 
 const SECTION_LABELS: Record<string, string> = {
-  loan: "Credit cards",
+  loan: "Loan",
   retirement: "Investments",
   liquid: "Cash",
 };
