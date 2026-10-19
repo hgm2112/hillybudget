@@ -36,7 +36,7 @@ A clean application rebuild on a from-scratch, `ledger_entries`-based schema. Th
 ### Dashboard split (implemented)
 
 - The old root ledger moved to **`/expenses`** (`src/app/expenses/{page,expenses-client,actions}.tsx`; component `ExpensesClient`; `revalidatePath("/expenses")`; month nav `?month=`). Root `/` now redirects to `/dashboard`.
-- New **`/dashboard`** (`src/app/dashboard/{page,dashboard-client}.tsx`): eyebrow-free `PageHeader` with a 3M/6M/12M/YTD selector, four range-based summary cards (income, expenses, net cash flow, net worth), and a 2×2 Recharts grid (spending trend area, income-vs-expenses bars, spending-by-category horizontal bars, net worth line). Data: `categories`, `monthly_category_totals`, `accounts`, `account_balances`. Net worth = latest snapshot per account (assets = liquid+retirement, liabilities = loan); the net-worth line plots **recorded months only** (no forward-fill). No Realtime. No migration needed.
+- New **`/dashboard`** (`src/app/dashboard/{page,dashboard-client}.tsx`): eyebrow-free `PageHeader` with a 3M/6M/12M/YTD/LIFETIME selector, four range-based summary cards (income, expenses, net cash flow, net worth), and a 2×2 Recharts grid (spending trend area, income-vs-expenses bars, spending-by-category horizontal bars, net worth line). Data: `categories`, `monthly_category_totals`, `accounts`, `account_balances`. Net worth = each account's latest balance at or before the month (assets = liquid+retirement, liabilities = loan), forward-filled across months with no snapshot. No Realtime. No migration needed.
 - Sidebar nav order: Dashboard `/dashboard`, Expenses `/expenses`, Accounts, Categories, Stats, Settings; brand links to `/dashboard`. Login/household redirects and the import "View expenses" link updated.
 
 ### Excel import (done)
@@ -204,6 +204,26 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - 11 commits this session: `ed14311` recurring controls + master-detail; `16b463c` inline detail + drag reorder + no-ideal; `b9d26d4` equal-thirds toggle row + groups polish; `a48a457` swap Ideal/Spending; `ced6273` collapsible groups + compact detail; `2c43321` loan-decrease green; `7ed567a` sidebar "Loan"; `a011289` whole-dollar sidebar/accounts; `0473980` dashboard/stats last-recorded window; `909301f` income signs + default $7500 (migration 0010); `2a13b06` dashboard flow/net windows.
 - Migrations `0001`–`0010` applied (local = remote); head `0010_income_fixes.sql`.
 - Working tree clean except the untracked root SVGs.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Dashboard lifetime + net-worth fixes (2026-10-19)
+
+- **Axis formatting:** added `moneyCompact` to `src/lib/money.ts` (`$15K`, `$1.2M`). The dashboard's three value Y-axes and the category X-axis use it with `width={48}`, fixing clipped tick labels (previously `money` rendered cents wider than `width={56}`). Tooltips still use `money` for exact cents.
+- **Spending by category:** still top 10 (`slice(0, 10)`), fixed `h-64` card. Added `interval={0}` to its category `YAxis` so all 10 names render instead of every other one (Recharts' default `preserveEnd` dropped ticks at ~21px band spacing).
+- **LIFETIME period:** added to the dashboard `PERIODS` selector (default stays `12M`). `windowMonths(period, anchor, floor)` now takes a floor; `flowFloor`/`netFloor` are the earliest ledger/balance months, so LIFETIME spans `monthRange(floor, anchor)` for the flow charts and the net-worth line independently.
+- **Net-worth forward-fill:** `netWorthSeries` now walks months in order and carries each account's most recent balance at or before each month (instead of only summing balances recorded that month). This removes false cliffs when a snapshot is missing. The summary card still uses the latest snapshot per account. This intentionally reverses the earlier "recorded months only, no forward-fill" behavior.
+- **Data backfill:** inserted the missing `account_balances` row for `401k - Principal` at `2025-08-01` = **$171,488.50**, the midpoint of July `$168,500` and September `$174,477` (interpolated; no real August statement). One-off service-role upsert on `(account_id, month)`; no migration added. Result: Aug 2025 forward-filled net worth is ~$270,428 between July ~$267,223 and September ~$279,022 (previously a false $72,839 dip).
+- Remaining artifact: October 2025 still drops (recorded net ~$205k) because `Mortgage` and the Schwab/HSA accounts are first recorded that month; forward-fill cannot infer earlier balances. Backfill those if the real history is wanted.
+- **Chart tooltips:** Recharts' default tooltip hardcodes a white box and no label color, so dark mode showed light-on-white text. Added a `.recharts-default-tooltip` override in `globals.css` (background `#e2e2e2` brand gray in light / `--popover` in dark, `--popover-foreground` text, border, `--radius-md`, shadow); `!important` only for the inline background/border. Fixes `/dashboard`, `/stats`, and `/categories` tooltips in both themes.
+- **Spending by category tooltip value:** its `<Bar>` has no `fill` (colors come from per-row `<Cell>`s), so Recharts' `entry.color` was `undefined` and the item fell back to the hardcoded `#000` (black on the dark popover). Added `itemStyle={{ color: "var(--popover-foreground)" }}` to that `<Tooltip>` and `fill="var(--popover-foreground)"` to its `<Bar>` (Cells still color the bars). Other charts keep their series-colored values.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
+### Accounts page: loan card removed, grouped balances (2026-10-19)
+
+- Removed the `"{name} (loan)"` detail card from `/accounts` (projected payoff, Remaining/Original/Principal paid/Percent paid, and the Original amount / Interest rate / Monthly payment / Start date inputs). The **Debt** and **Net worth** summary tiles stay; net worth still subtracts `monthTotal("loan")`, and loans are still tracked by monthly balance (the loan row keeps its Save/Archive/Delete and change color).
+- The **Balances for {month}** list is now grouped **Liquid → Retirement → Loan** (same `sort_order` within each group) with a plain horizontal rule between groups (no section labels).
+- Loan metadata is dropped from the UI entirely, including the loan-only fields in the Add-account form. `accounts/page.tsx` no longer selects them and `addAccount`'s four loan fields are now optional. `updateAccount` remains exported but is no longer called from the client.
+- The DB columns `accounts.{original_amount,interest_rate,monthly_payment,start_date}` and their existing data are **preserved** (no schema change, no migration); the app simply stops reading/writing them.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
 ## Checks
