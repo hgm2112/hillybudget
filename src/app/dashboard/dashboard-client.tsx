@@ -315,8 +315,8 @@ export function DashboardClient({
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                   <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} tickFormatter={(value) => moneyCompact(Number(value))} />
                   <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} fontSize={12} width={110} interval={0} />
-                  <Tooltip formatter={(value) => money(Number(value))} />
-                  <Bar dataKey="value" radius={[0, 3, 3, 0]}>
+                  <Tooltip formatter={(value) => money(Number(value))} itemStyle={{ color: "var(--popover-foreground)" }} />
+                  <Bar dataKey="value" radius={[0, 3, 3, 0]} fill="var(--popover-foreground)">
                     {categoryData.map((row) => (
                       <Cell key={row.name} fill={row.color} />
                     ))}
