@@ -471,7 +471,7 @@ export function AccountsClient({
     return (
       <div
         key={account.id}
-        className="grid grid-cols-2 items-center gap-x-3 gap-y-1 px-4 py-1 md:col-span-full md:grid-cols-subgrid md:px-0 md:gap-y-0"
+        className="grid grid-cols-2 items-center gap-x-5 gap-y-1 px-4 py-1 md:col-span-full md:grid-cols-subgrid md:px-0 md:gap-y-0"
       >
         <div className="flex min-w-0 items-center gap-2 md:col-start-1 md:row-start-1">
           <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: GROUP_COLORS[account.kind] }} />
@@ -626,8 +626,8 @@ export function AccountsClient({
         ) : (
           <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
             {groups.map((group) => (
-              <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_auto] md:gap-x-3 md:px-4">
-                <div className="flex items-center gap-3 px-4 py-1.5 md:col-span-full md:grid md:grid-cols-subgrid md:px-0 md:gap-y-0">
+              <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_auto] md:gap-x-5 md:px-4">
+                <div className="flex items-center gap-5 px-4 py-1.5 md:col-span-full md:grid md:grid-cols-subgrid md:px-0 md:gap-y-0">
                   <div className="flex items-center gap-3 md:col-start-1">
                     <span
                       className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
