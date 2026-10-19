@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { money } from "@/lib/money";
+import { moneyWhole } from "@/lib/money";
 import { monthLabel, monthName } from "@/lib/month";
 import { MonthNav } from "@/components/month-nav";
 import { Button } from "@/components/ui/button";
@@ -261,7 +261,7 @@ export function AccountsClient({
   function changeText(current: number, previous: number) {
     if (!hasBalances) return "no saved data";
     if (!prevMonth) return "first snapshot";
-    return `change ${money(current - previous)}`;
+    return `change ${moneyWhole(current - previous)}`;
   }
 
   return (
@@ -285,10 +285,10 @@ export function AccountsClient({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div inert={isSkipped} className={cn("grid gap-3 md:grid-cols-4", isSkipped && "opacity-40")}>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Liquid</div><div className="text-lg font-semibold tabular-nums">{money(liquidTotal)}</div><div className="text-xs text-muted-foreground">{changeText(liquidTotal, previousLiquid)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Retirement</div><div className="text-lg font-semibold tabular-nums">{money(retirementTotal)}</div><div className="text-xs text-muted-foreground">{changeText(retirementTotal, previousRetirement)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Debt</div><div className="text-lg font-semibold tabular-nums">{money(debtTotal)}</div><div className="text-xs text-muted-foreground">{changeText(debtTotal, previousDebt)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Net worth</div><div className="text-lg font-semibold tabular-nums">{money(netWorth)}</div><div className="text-xs text-muted-foreground">{changeText(netWorth, previousNet)}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Liquid</div><div className="text-lg font-semibold tabular-nums">{moneyWhole(liquidTotal)}</div><div className="text-xs text-muted-foreground">{changeText(liquidTotal, previousLiquid)}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Retirement</div><div className="text-lg font-semibold tabular-nums">{moneyWhole(retirementTotal)}</div><div className="text-xs text-muted-foreground">{changeText(retirementTotal, previousRetirement)}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Debt</div><div className="text-lg font-semibold tabular-nums">{moneyWhole(debtTotal)}</div><div className="text-xs text-muted-foreground">{changeText(debtTotal, previousDebt)}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Net worth</div><div className="text-lg font-semibold tabular-nums">{moneyWhole(netWorth)}</div><div className="text-xs text-muted-foreground">{changeText(netWorth, previousNet)}</div></CardContent></Card>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
@@ -352,7 +352,7 @@ export function AccountsClient({
                   <div className="text-sm tabular-nums">
                     {!isSkipped && change !== null ? (
                       <span className={improving ? "text-green-600" : "text-red-600"}>
-                        {change >= 0 ? "+" : ""}{money(change)} ({percent.toFixed(2)}%)
+                        {change >= 0 ? "+" : ""}{moneyWhole(change)} ({percent.toFixed(2)}%)
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -392,9 +392,9 @@ export function AccountsClient({
             <CardContent className="p-4">
               <h2 className="text-lg font-semibold">{account.name} (loan)</h2>
               <div className="mt-2 grid gap-2 md:grid-cols-4">
-                <div><span className="text-xs text-muted-foreground">Remaining</span><div>{money(Number.isFinite(current) ? current : 0)}</div></div>
-                <div><span className="text-xs text-muted-foreground">Original</span><div>{original ? money(original) : "-"}</div></div>
-                <div><span className="text-xs text-muted-foreground">Principal paid</span><div>{principalPaid !== null ? money(principalPaid) : "-"}</div></div>
+                <div><span className="text-xs text-muted-foreground">Remaining</span><div>{moneyWhole(Number.isFinite(current) ? current : 0)}</div></div>
+                <div><span className="text-xs text-muted-foreground">Original</span><div>{original ? moneyWhole(original) : "-"}</div></div>
+                <div><span className="text-xs text-muted-foreground">Principal paid</span><div>{principalPaid !== null ? moneyWhole(principalPaid) : "-"}</div></div>
                 <div><span className="text-xs text-muted-foreground">Percent paid</span><div>{percentPaid !== null ? `${percentPaid.toFixed(2)}%` : "-"}</div></div>
               </div>
               {payoff && <p className="mt-2 text-sm text-muted-foreground">Projected payoff: {payoff}</p>}
