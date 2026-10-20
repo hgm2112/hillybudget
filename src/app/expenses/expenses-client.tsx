@@ -344,7 +344,7 @@ export function ExpensesClient({
           className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2 text-left"
           onClick={toggle}
         >
-          <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+          <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
             {ideal > 0 && (
@@ -478,9 +478,12 @@ export function ExpensesClient({
                   const groupSpent = groupCategories.reduce((sum, category) => sum + categoryTotal(category.id), 0);
                   return (
                     <div key={group.id || "ungrouped"} className="space-y-1">
-                      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-                        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                        <span className="font-heading text-sm font-bold">{group.name}</span>
+                      <div
+                        className="group-tint -mx-3 flex items-center gap-2 rounded-lg px-5 py-1.5"
+                        style={{ "--group-color": group.color } as React.CSSProperties}
+                      >
+                        <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                        <span className="font-heading text-base font-bold">{group.name}</span>
                         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{money(groupSpent)}</span>
                       </div>
                       {groupCategories.map((category) => renderCategoryBox(category, group))}
