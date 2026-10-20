@@ -13,6 +13,12 @@ export type Balance = { id: string; account_id: string; month: string; balance: 
 
 export const GROUP_ORDER: AccountKind[] = ["liquid", "retirement", "loan"];
 
+export const GROUP_COLORS: Record<AccountKind, string> = {
+  liquid: "#4A7BA3",
+  retirement: "#7767A6",
+  loan: "#D85700",
+};
+
 export function parseBalanceInput(raw: string): number | null {
   const cleaned = raw.replace(/[$,\s]/g, "");
   if (cleaned === "") return null;
