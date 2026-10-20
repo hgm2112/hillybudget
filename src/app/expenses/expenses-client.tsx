@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, MoreHorizontal, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, moneyWhole, parseAmountExpression } from "@/lib/money";
-import { monthLabel } from "@/lib/month";
+import { monthLabel, monthName } from "@/lib/month";
+import { deltaInfo, type DeltaInfo } from "@/lib/accounts";
 import { MonthNav } from "@/components/month-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,12 @@ type Category = {
   kind: "expense" | "income";
   ideal_override: number | null;
   archived: boolean;
+  group_id: string | null;
 };
+
+type Group = { id: string; name: string; color: string; sort_order: number };
+
+type PreviousTotals = { income: number; expense: number; net: number; entries: number };
 
 type CardItem = { id: string; name: string; color: string; archived: boolean };
 
@@ -53,6 +59,25 @@ type EditTarget = {
   cardOptions: CardItem[] | null;
 };
 
+const TONE_CLASSES: Record<"positive" | "negative" | "neutral", string> = {
+  positive: "bg-[#10b981]/15 text-[#0f7a52] dark:bg-[#10b981]/20 dark:text-[#5ee0b0]",
+  negative: "bg-[#ef4444]/12 text-[#b3261e] dark:bg-[#ef4444]/20 dark:text-[#fca5a5]",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+function SummaryChip({ info, suffix }: { info: DeltaInfo; suffix?: string }) {
+  const tone = info.good === null ? "neutral" : info.good ? "positive" : "negative";
+  const Icon = info.direction === "up" ? ArrowUp : info.direction === "down" ? ArrowDown : null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap tabular-nums ${TONE_CLASSES[tone]}`}>
+      {Icon && <Icon className="size-3" />}
+      {info.delta >= 0 ? "+" : ""}
+      {moneyWhole(info.delta)}
+      {suffix ? <span className="font-normal opacity-70">{suffix}</span> : null}
+    </span>
+  );
+}
+
 export function ExpensesClient({
   householdId,
   month,
@@ -61,6 +86,9 @@ export function ExpensesClient({
   entries,
   idealByCategory,
   months,
+  groups,
+  previousTotals,
+  prevMonth,
 }: {
   householdId: string;
   month: string;
@@ -69,6 +97,9 @@ export function ExpensesClient({
   entries: Entry[];
   idealByCategory: Record<string, number>;
   months: string[];
+  groups: Group[];
+  previousTotals: PreviousTotals;
+  prevMonth: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -127,6 +158,32 @@ export function ExpensesClient({
   const incomeTotal = useMemo(() => incomeEntries.reduce((sum, entry) => sum + entry.amount, 0), [incomeEntries]);
   const netTotal = incomeTotal - expenseTotal;
 
+  const groupsWithCategories = useMemo(() => {
+    const known = new Set(groups.map((group) => group.id));
+    const list = groups.map((group) => ({
+      group,
+      categories: expenseCategories.filter((category) => category.group_id === group.id),
+    }));
+    const ungrouped = expenseCategories.filter((category) => !category.group_id || !known.has(category.group_id));
+    if (ungrouped.length > 0) {
+      list.push({ group: { id: "", name: "Ungrouped", color: "#6b7280", sort_order: 9999 }, categories: ungrouped });
+    }
+    return list.filter((entry) => entry.categories.length > 0);
+  }, [groups, expenseCategories]);
+
+  const filteredEntries = useCallback(
+    (categoryId: string) =>
+      (entriesByCategory.get(categoryId) ?? []).filter((entry) =>
+        cardFilter === "all" ? true : (entry.card_id ?? "none") === cardFilter
+      ),
+    [entriesByCategory, cardFilter]
+  );
+
+  const categoryTotal = useCallback(
+    (categoryId: string) => filteredEntries(categoryId).reduce((sum, entry) => sum + entry.amount, 0),
+    [filteredEntries]
+  );
+
   const cardTotals = useMemo(() => {
     const map = new Map<string, number>();
     map.set("none", 0);
@@ -137,6 +194,13 @@ export function ExpensesClient({
     });
     return map;
   }, [expenseEntries, cards]);
+
+  const summaries = [
+    { key: "income", label: "Income", value: incomeTotal, previous: previousTotals.income, dot: "#10b981", kind: "liquid" as const, currency: true },
+    { key: "expense", label: "Expenses", value: expenseTotal, previous: previousTotals.expense, dot: "#ef4444", kind: "loan" as const, currency: true },
+    { key: "net", label: "Net", value: netTotal, previous: previousTotals.net, dot: netTotal >= 0 ? "#10b981" : "#ef4444", kind: "liquid" as const, currency: true },
+    { key: "entries", label: "Entries", value: expenseEntries.length, previous: previousTotals.entries, dot: "#6b7280", kind: "liquid" as const, currency: false },
+  ];
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -237,289 +301,311 @@ export function ExpensesClient({
     });
   }
 
-  return (
-    <>
-      <div className="relative mb-3 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-semibold">Expenses</h1>
-          <p className="text-sm text-muted-foreground">Track and manage your household expenses, one category at a time.</p>
-          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
-        </div>
-        <div className="flex justify-center">
-          <MonthNav value={month} months={months} onSelect={goToMonth} />
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          {viewMode === "category" && (
-            <select
-              aria-label="Card filter"
-              value={cardFilter}
-              onChange={(event) => setCardFilter(event.target.value)}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="all">All cards</option>
-              <option value="none">No card</option>
-              {activeCards.map((card) => (
-                <option key={card.id} value={card.id}>{card.name}</option>
-              ))}
-            </select>
-          )}
-          <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
-          <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
-            {viewMode === "category" ? "By card" : "By category"}
-          </Button>
-        </div>
-      </div>
+  function renderCategoryBox(category: Category) {
+    const list = filteredEntries(category.id);
+    const total = list.reduce((sum, entry) => sum + entry.amount, 0);
+    const ideal = idealByCategory[category.id] ?? 0;
+    const idealRounded = Math.round(ideal);
+    const difference = total - idealRounded;
+    const isOpen = expanded.has(category.id);
+    const quickKey = category.id;
+    const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+    function toggle() {
+      setExpanded((existing) => {
+        const next = new Set(existing);
+        if (next.has(category.id)) next.delete(category.id);
+        else next.add(category.id);
+        return next;
+      });
+    }
 
-      {entries.length === 0 && (
-        <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 p-2 text-sm text-primary">
-          No entries recorded for {monthLabel(month)} yet. Reminder: enter expenses around the 5th of every month.
-        </div>
-      )}
+    function submitQuick(split: boolean) {
+      const parts = parseAmountExpression(quickState.amount);
+      if (!parts) return;
+      const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
+      run(
+        addEntries({
+          month,
+          categoryId: category.id,
+          cardId: quickState.cardId === "none" ? null : quickState.cardId,
+          note: null,
+          amounts,
+        })
+      ).then((ok) => {
+        if (ok) setQuickDraft(quickKey, { amount: "" });
+      });
+    }
 
-      <div className="sticky top-0 z-10 mb-3 grid gap-2 rounded-lg border bg-background/95 p-2 backdrop-blur md:grid-cols-4">
-        <div className="rounded-md bg-muted px-2.5 py-1.5">
-          <div className="text-xs text-muted-foreground">Income</div>
-          <div className="text-base font-semibold tabular-nums text-green-600">{money(incomeTotal)}</div>
-        </div>
-        <div className="rounded-md bg-muted px-2.5 py-1.5">
-          <div className="text-xs text-muted-foreground">Expenses</div>
-          <div className="text-base font-semibold tabular-nums">{money(expenseTotal)}</div>
-        </div>
-        <div className="rounded-md bg-muted px-2.5 py-1.5">
-          <div className="text-xs text-muted-foreground">Net</div>
-          <div className={`text-base font-semibold tabular-nums ${netTotal >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {money(netTotal)}
-          </div>
-        </div>
-        <div className="rounded-md bg-muted px-2.5 py-1.5">
-          <div className="text-xs text-muted-foreground">Entries</div>
-          <div className="text-base font-semibold tabular-nums">{expenseEntries.length}</div>
-        </div>
-      </div>
+    return (
+      <div key={category.id}>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2 text-left"
+          onClick={toggle}
+        >
+          <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
+          <span className="font-heading text-sm font-semibold">{category.name}</span>
+          <span className="ml-auto flex items-center gap-3">
+            {ideal > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
+                <span className={`text-xs ${difference > 0 ? "text-red-600" : "text-green-600"}`}>
+                  ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
+                </span>
+              </>
+            )}
+            <span className="font-heading text-sm font-semibold tabular-nums">{money(total)}</span>
+            {isOpen ? (
+              <ChevronUp className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            )}
+          </span>
+        </button>
 
-      {viewMode === "category" ? (
-        <div className="space-y-2">
-          {expenseCategories.map((category) => {
-            const categoryEntries = (entriesByCategory.get(category.id) ?? []).filter((entry) =>
-              cardFilter === "all" ? true : (entry.card_id ?? "none") === cardFilter
-            );
-            const categoryTotal = categoryEntries.reduce((sum, entry) => sum + entry.amount, 0);
-            const ideal = idealByCategory[category.id] ?? 0;
-            const idealRounded = Math.round(ideal);
-            const difference = categoryTotal - idealRounded;
-            const isOpen = expanded.has(category.id);
-            const quickKey = category.id;
-            const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
-
-            function toggle() {
-              setExpanded((existing) => {
-                const next = new Set(existing);
-                if (next.has(category.id)) next.delete(category.id);
-                else next.add(category.id);
-                return next;
-              });
-            }
-
-            function submitQuick(split: boolean) {
-              const parts = parseAmountExpression(quickState.amount);
-              if (!parts) return;
-              const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
-              run(
-                addEntries({
-                  month,
-                  categoryId: category.id,
-                  cardId: quickState.cardId === "none" ? null : quickState.cardId,
-                  note: null,
-                  amounts,
-                })
-              ).then((ok) => {
-                if (ok) setQuickDraft(quickKey, { amount: "" });
-              });
-            }
-
-            return (
-              <div key={category.id} className="rounded-xl bg-card ring-1 ring-foreground/10">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left"
-                  onClick={toggle}
-                >
-                  <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
-                  <span className="font-heading text-sm font-semibold">{category.name}</span>
-                  <span className="ml-auto flex items-center gap-3">
-                    {ideal > 0 && (
-                      <>
-                        <span className="text-xs text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
-                        <span className={`text-xs ${difference > 0 ? "text-red-600" : "text-green-600"}`}>
-                          ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
-                        </span>
-                      </>
-                    )}
-                    <span className="font-heading text-sm font-semibold tabular-nums">{money(categoryTotal)}</span>
-                    {isOpen ? (
-                      <ChevronUp className="size-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="size-4 text-muted-foreground" />
-                    )}
-                  </span>
-                </button>
-
-                {isOpen && (
-                  <div className="pb-2.5">
-                    {categoryEntries.map((entry) => renderEntryRow(entry, cardName(entry.card_id), null, cards))}
-
-                    <div className="flex items-center gap-2 px-3 pt-1.5">
-                      <Input
-                        placeholder="Amount (e.g. 12.50+8)"
-                        title="Enter adds the total; Shift+Enter splits each part into its own entry."
-                        value={quickState.amount}
-                        onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") return;
-                          event.preventDefault();
-                          submitQuick(event.shiftKey);
-                        }}
-                        inputMode="decimal"
-                        className="h-8 flex-1 text-sm tabular-nums"
-                      />
-                      {renderCardSelector(
-                        quickState.cardId,
-                        (value) => setQuickDraft(quickKey, { cardId: value }),
-                        `quick-${quickKey}`,
-                        "h-8 w-40 shrink-0 rounded-md border bg-background px-2 text-sm"
-                      )}
-                      <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {[...cards, { id: "none", name: "No card", color: "#6b7280" }].map((card) => {
-            const cardEntries = expenseEntries.filter((entry) => (entry.card_id ?? "none") === card.id);
-            const subtotal = cardTotals.get(card.id) ?? 0;
-            const quickKey = `card:${card.id}`;
-            const quickState = quick[quickKey] ?? { amount: "", cardId: card.id, categoryId: expenseCategories[0]?.id ?? "" };
-
-            function submitQuick(split: boolean) {
-              const parts = parseAmountExpression(quickState.amount);
-              const categoryId = quickState.categoryId ?? expenseCategories[0]?.id;
-              if (!parts || !categoryId) return;
-              const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
-              run(
-                addEntries({
-                  month,
-                  categoryId,
-                  cardId: card.id === "none" ? null : card.id,
-                  note: null,
-                  amounts,
-                })
-              ).then((ok) => {
-                if (ok) setQuickDraft(quickKey, { amount: "" });
-              });
-            }
-
-            return (
-              <div key={card.id} className="rounded-xl bg-card ring-1 ring-foreground/10">
-                <div className="flex items-center gap-3 px-3 py-2">
-                  <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
-                  <span className="font-heading text-sm font-semibold">{card.name}</span>
-                  <span className="ml-auto font-heading text-sm font-semibold tabular-nums">{money(subtotal)}</span>
-                </div>
-                <div className="pb-2.5">
-                  {cardEntries.map((entry) =>
-                    renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards)
-                  )}
-                  <div className="flex items-center gap-2 px-3 pt-1.5">
-                    <Input
-                      placeholder="Amount (e.g. 12.50+8)"
-                      title="Enter adds the total; Shift+Enter splits each part into its own entry."
-                      value={quickState.amount}
-                      onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        submitQuick(event.shiftKey);
-                      }}
-                      inputMode="decimal"
-                      className="h-8 flex-1 text-sm tabular-nums"
-                    />
-                    <select
-                      value={quickState.categoryId ?? expenseCategories[0]?.id ?? ""}
-                      onChange={(event) => setQuickDraft(quickKey, { categoryId: event.target.value })}
-                      className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
-                    >
-                      {expenseCategories.map((category) => (
-                        <option key={category.id} value={category.id}>{category.name}</option>
-                      ))}
-                    </select>
-                    <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
-                      <Plus className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <section className="mt-4">
-        <div className="rounded-xl bg-card ring-1 ring-foreground/10">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <h2 className="font-heading text-sm font-semibold">Income</h2>
-            <span className="ml-auto font-heading text-sm font-semibold tabular-nums text-green-600">{money(incomeTotal)}</span>
-          </div>
+        {isOpen && (
           <div className="pb-2.5">
-            {incomeEntries.map((entry) => renderEntryRow(entry, categoryName(entry.category_id), incomeCategories, null))}
+            {list.map((entry) => renderEntryRow(entry, cardName(entry.card_id), null, cards))}
+
             <div className="flex items-center gap-2 px-3 pt-1.5">
               <Input
-                placeholder="Amount"
-                value={newIncome.amount}
-                onChange={(event) => setNewIncome((state) => ({ ...state, amount: event.target.value }))}
+                placeholder="Amount (e.g. 12.50+8)"
+                title="Enter adds the total; Shift+Enter splits each part into its own entry."
+                value={quickState.amount}
+                onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
                   event.preventDefault();
-                  submitIncome();
+                  submitQuick(event.shiftKey);
                 }}
                 inputMode="decimal"
                 className="h-8 flex-1 text-sm tabular-nums"
               />
-              <select
-                value={newIncome.categoryId || incomeCategories[0]?.id || ""}
-                onChange={(event) => setNewIncome((state) => ({ ...state, categoryId: event.target.value }))}
-                className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
-                disabled={incomeCategories.length === 0}
-              >
-                {incomeCategories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-              <Button
-                size="icon"
-                className="size-8 shrink-0"
-                aria-label="Add income"
-                disabled={incomeCategories.length === 0}
-                onClick={submitIncome}
-              >
+              {renderCardSelector(
+                quickState.cardId,
+                (value) => setQuickDraft(quickKey, { cardId: value }),
+                `quick-${quickKey}`,
+                "h-8 w-40 shrink-0 rounded-md border bg-background px-2 text-sm"
+              )}
+              <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
                 <Plus className="size-4" />
               </Button>
             </div>
-            {incomeCategories.length === 0 && (
-              <p className="px-3 pt-1 text-xs text-muted-foreground">
-                No income categories yet. Add one on the Categories page.
-              </p>
-            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-2xl font-semibold">Expenses</h1>
+          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
+        </div>
+        <MonthNav value={month} months={months} onSelect={goToMonth} />
+      </div>
+
+      {error && <p className="my-3 text-sm text-red-600">{error}</p>}
+
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        {summaries.map((summary) => (
+          <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
+              {summary.label}
+            </div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">
+              {summary.currency ? moneyWhole(summary.value) : summary.value}
+            </div>
+            <div className="mt-1.5">
+              {!prevMonth ? (
+                <span className="text-xs text-muted-foreground">no prior data</span>
+              ) : summary.currency ? (
+                <SummaryChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
+                  {summary.value - summary.previous >= 0 ? "+" : ""}
+                  {summary.value - summary.previous}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="my-3 flex flex-wrap items-center gap-2">
+        {viewMode === "category" && (
+          <select
+            aria-label="Card filter"
+            value={cardFilter}
+            onChange={(event) => setCardFilter(event.target.value)}
+            className="h-8 rounded-md border bg-background px-2 text-sm"
+          >
+            <option value="all">All cards</option>
+            <option value="none">No card</option>
+            {activeCards.map((card) => (
+              <option key={card.id} value={card.id}>{card.name}</option>
+            ))}
+          </select>
+        )}
+        <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
+        <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
+          {viewMode === "category" ? "By card" : "By category"}
+        </Button>
+      </div>
+
+      <div className="rounded-xl border bg-card">
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
+          <div>
+            <h2 className="text-sm font-semibold">Expenses for {monthLabel(month)}</h2>
+            <p className="text-xs text-muted-foreground">Type an amount, then Shift+Enter to continue to another amount.</p>
           </div>
         </div>
-      </section>
+
+        <div className="p-3">
+          {viewMode === "category" ? (
+            <div className="space-y-3">
+              {groupsWithCategories.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">No expense categories yet. Add one on the Categories page.</p>
+              ) : (
+                groupsWithCategories.map(({ group, categories: groupCategories }) => {
+                  const groupSpent = groupCategories.reduce((sum, category) => sum + categoryTotal(category.id), 0);
+                  return (
+                    <div key={group.id || "ungrouped"} className="space-y-1">
+                      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                        <span className="font-heading text-sm font-bold">{group.name}</span>
+                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{money(groupSpent)}</span>
+                      </div>
+                      {groupCategories.map((category) => renderCategoryBox(category))}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {[...cards, { id: "none", name: "No card", color: "#6b7280" }].map((card) => {
+                const cardEntries = expenseEntries.filter((entry) => (entry.card_id ?? "none") === card.id);
+                const subtotal = cardTotals.get(card.id) ?? 0;
+                const quickKey = `card:${card.id}`;
+                const quickState = quick[quickKey] ?? { amount: "", cardId: card.id, categoryId: expenseCategories[0]?.id ?? "" };
+
+                function submitQuick(split: boolean) {
+                  const parts = parseAmountExpression(quickState.amount);
+                  const categoryId = quickState.categoryId ?? expenseCategories[0]?.id;
+                  if (!parts || !categoryId) return;
+                  const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
+                  run(
+                    addEntries({
+                      month,
+                      categoryId,
+                      cardId: card.id === "none" ? null : card.id,
+                      note: null,
+                      amounts,
+                    })
+                  ).then((ok) => {
+                    if (ok) setQuickDraft(quickKey, { amount: "" });
+                  });
+                }
+
+                return (
+                  <div key={card.id} className="space-y-0.5">
+                    <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2">
+                      <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
+                      <span className="font-heading text-sm font-semibold">{card.name}</span>
+                      <span className="ml-auto font-heading text-sm font-semibold tabular-nums">{money(subtotal)}</span>
+                    </div>
+                    <div>
+                      {cardEntries.map((entry) =>
+                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards)
+                      )}
+                      <div className="flex items-center gap-2 px-3 pt-1.5">
+                        <Input
+                          placeholder="Amount (e.g. 12.50+8)"
+                          title="Enter adds the total; Shift+Enter splits each part into its own entry."
+                          value={quickState.amount}
+                          onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            submitQuick(event.shiftKey);
+                          }}
+                          inputMode="decimal"
+                          className="h-8 flex-1 text-sm tabular-nums"
+                        />
+                        <select
+                          value={quickState.categoryId ?? expenseCategories[0]?.id ?? ""}
+                          onChange={(event) => setQuickDraft(quickKey, { categoryId: event.target.value })}
+                          className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
+                        >
+                          {expenseCategories.map((category) => (
+                            <option key={category.id} value={category.id}>{category.name}</option>
+                          ))}
+                        </select>
+                        <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
+                          <Plus className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <section className="mt-4 border-t border-border/60 pt-3">
+            <div className="flex items-center gap-3 px-1">
+              <h2 className="font-heading text-sm font-semibold">Income</h2>
+              <span className="ml-auto font-heading text-sm font-semibold tabular-nums text-green-600">{money(incomeTotal)}</span>
+            </div>
+            <div className="mt-1.5">
+              {incomeEntries.map((entry) => renderEntryRow(entry, categoryName(entry.category_id), incomeCategories, null))}
+              <div className="flex items-center gap-2 px-1 pt-1.5">
+                <Input
+                  placeholder="Amount"
+                  value={newIncome.amount}
+                  onChange={(event) => setNewIncome((state) => ({ ...state, amount: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    submitIncome();
+                  }}
+                  inputMode="decimal"
+                  className="h-8 flex-1 text-sm tabular-nums"
+                />
+                <select
+                  value={newIncome.categoryId || incomeCategories[0]?.id || ""}
+                  onChange={(event) => setNewIncome((state) => ({ ...state, categoryId: event.target.value }))}
+                  className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
+                  disabled={incomeCategories.length === 0}
+                >
+                  {incomeCategories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+                <Button
+                  size="icon"
+                  className="size-8 shrink-0"
+                  aria-label="Add income"
+                  disabled={incomeCategories.length === 0}
+                  onClick={submitIncome}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+              {incomeCategories.length === 0 && (
+                <p className="px-1 pt-1 text-xs text-muted-foreground">
+                  No income categories yet. Add one on the Categories page.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
 
       {editing && (
         <EntryDialog
