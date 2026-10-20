@@ -439,7 +439,7 @@ export function AccountsClient({
         );
       }
       return (
-        <div className="relative w-[62%] mx-auto">
+        <div className="relative w-[62%]">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${payoff.percent}%`, backgroundColor: GROUP_COLORS.loan }} />
           </div>
@@ -453,7 +453,7 @@ export function AccountsClient({
     const share = value !== null ? sharePercent(value, group.total) : null;
     if (!group.multi || share === null) return null;
     return (
-      <div className="relative w-[62%] mx-auto">
+      <div className="relative w-[62%]">
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: GROUP_COLORS[account.kind] }} />
         </div>
