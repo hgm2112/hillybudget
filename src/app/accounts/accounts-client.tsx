@@ -639,7 +639,7 @@ export function AccountsClient({
                       {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
                     </span>
                   </div>
-                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-start">
+                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-center">
                     <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
                     {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
                   </div>
