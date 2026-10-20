@@ -23,6 +23,7 @@ Process:
 - Never expose secrets. Never use the service-role key in client-side code, and keep `.env.local` untracked.
 - A clean application rebuild on the new from-scratch schema (`ledger_entries`-based) is approved and complete. The database reset has been applied; preserve the new schema, RLS policies, and auth unless I explicitly approve a change.
 - Keep `SESSION.md` current at the end of substantial work sessions.
+- Before committing any merge, run `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'` and resolve any conflicts. Never commit a file containing conflict markers.
 
 Git workflow:
 - Use feature branches (`feat/`, `fix/`, `chore/`, etc.).
