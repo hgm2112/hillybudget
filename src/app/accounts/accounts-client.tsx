@@ -10,6 +10,7 @@ import {
   carryForwardItems,
   deltaInfo,
   formatCurrencyInput,
+  GROUP_COLORS,
   GROUP_ORDER,
   latestBalanceBefore,
   parseBalanceInput,
@@ -50,12 +51,6 @@ import {
   type ActionResult,
 } from "./actions";
 import { cn } from "cn";
-
-const GROUP_COLORS: Record<AccountKind, string> = {
-  liquid: "#4A7BA3",
-  retirement: "#7767A6",
-  loan: "#D85700",
-};
 
 const GROUP_LABELS: Record<AccountKind, string> = {
   liquid: "Liquid",

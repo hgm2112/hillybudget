@@ -12,10 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { parseBalanceInput, type Account, type AccountKind } from "@/lib/accounts";
+import { GROUP_COLORS, parseBalanceInput, type Account, type AccountKind } from "@/lib/accounts";
 import { addAccount, updateAccount } from "./actions";
-
-const PALETTE = ["#d85700", "#f2a65a", "#8c3b00", "#b8865a", "#6b7280", "#9ca3af", "#4b5563", "#d1a37a"];
 
 export function AccountDialog({
   account,
@@ -29,7 +27,6 @@ export function AccountDialog({
   const router = useRouter();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AccountKind>("liquid");
-  const [color, setColor] = useState(PALETTE[0]);
   const [originalAmount, setOriginalAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +36,6 @@ export function AccountDialog({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(account?.name ?? "");
     setKind(account?.kind ?? "liquid");
-    setColor(account?.color ?? PALETTE[0]);
     setOriginalAmount(account?.original_amount !== null && account?.original_amount !== undefined ? String(account.original_amount) : "");
     setError(null);
   }, [account, open]);
@@ -56,7 +52,7 @@ export function AccountDialog({
       return;
     }
     setSaving(true);
-    const payload = { name, kind, color, original_amount: kind === "loan" ? parsedOriginal : null };
+    const payload = { name, kind, color: GROUP_COLORS[kind], original_amount: kind === "loan" ? parsedOriginal : null };
     const result = account ? await updateAccount(account.id, payload) : await addAccount(payload);
     setSaving(false);
     if (result?.error) {
@@ -78,24 +74,18 @@ export function AccountDialog({
             <Label htmlFor="account-name">Name</Label>
             <Input id="account-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="account-kind">Type</Label>
-              <select
-                id="account-kind"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as AccountKind)}
-                className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-              >
-                <option value="liquid">Liquid</option>
-                <option value="retirement">Retirement</option>
-                <option value="loan">Loan</option>
-              </select>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="account-color">Color</Label>
-              <Input id="account-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} />
-            </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="account-kind">Type</Label>
+            <select
+              id="account-kind"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as AccountKind)}
+              className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="liquid">Liquid</option>
+              <option value="retirement">Retirement</option>
+              <option value="loan">Loan</option>
+            </select>
           </div>
           {kind === "loan" && (
             <div className="grid gap-1.5">
