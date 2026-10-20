@@ -34,6 +34,7 @@ type Category = {
   ideal_override: number | null;
   archived: boolean;
   group_id: string | null;
+  no_ideal: boolean;
 };
 
 type Group = { id: string; name: string; color: string; sort_order: number };
@@ -331,6 +332,7 @@ export function ExpensesClient({
     const ideal = idealByCategory[category.id] ?? 0;
     const idealRounded = Math.round(ideal);
     const difference = total - idealRounded;
+    const showIdeal = !category.no_ideal && ideal > 0;
     const isOpen = query !== "" || expanded.has(category.id);
     const quickKey = category.id;
     const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
@@ -371,15 +373,17 @@ export function ExpensesClient({
           <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
-            {ideal > 0 && (
-              <>
-                <span className="text-xs text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
-                <span className={`text-xs ${difference > 0 ? "text-red-600" : "text-green-600"}`}>
-                  ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
+            <span className="flex items-center gap-4">
+              {showIdeal && (
+                <span className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
+                  <span className={difference > 0 ? "text-red-600" : "text-green-600"}>
+                    ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
+                  </span>
                 </span>
-              </>
-            )}
-            <span className="font-heading text-sm font-semibold tabular-nums">{money(total)}</span>
+              )}
+              <span className="font-heading text-sm font-semibold tabular-nums">{money(total)}</span>
+            </span>
             {isOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
             ) : (
