@@ -257,6 +257,15 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Add/Edit Account no longer has a Color picker. The saved `accounts.color` is always set to the account's group color (`GROUP_COLORS[kind]`), so editing/saving normalizes any old value to the group color. The `/accounts` row dot already renders `GROUP_COLORS[account.kind]`.
 - Account "groups" are the hardcoded `account_kind` enum (`liquid`, `retirement`, `loan`) — no group table/UI; a new household starts with no group headers, and `+ Add account` → Type is how an account enters a group.
 
+### `/expenses` grouped view (2026-10-20)
+
+- Restyled `/expenses` to match `/accounts`: the 4 widgets (Income / Expenses / Net / Entries) are now summary cards (`rounded-xl border bg-card`, dot + uppercase label, `text-2xl` `moneyWhole`, change chip vs the previous recorded month). `page.tsx` fetches all `ledger_entries` (`category_id, amount, month`) to derive `previousTotals`.
+- Removed the "Track and manage your household expenses…" subtext and the "No entries recorded for…" banner.
+- `All cards` / `Add recurring items` / `By card` moved under the widgets.
+- One card titled `Expenses for {Month Year}` with helper `Type an amount, then Shift+Enter to continue to another amount.`; the grouped expense rows and the Income section live inside it. By-card view unchanged.
+- Expense categories are grouped by `categories.group_id` using the existing `category_groups` (name + color + spent total, simple header, no collapse), with an `Ungrouped` fallback — same shape as `/categories`. `page.tsx` now queries `category_groups` and selects `group_id`.
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
