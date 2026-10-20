@@ -145,7 +145,6 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - `CategoryDialog` (used by both New and Edit via `⋯ → Edit`) has an **Icon** section: search box, wrapped icon grid, and an **Auto** button to clear the override. Server actions (`addCategory`/`updateCategory`) validate the icon name against the registry.
 - Icons render in the grouped list, the flat "All regular categories" list, and the excluded list. PR #17, `5842fa3`.
 
-<<<<<<< HEAD
 ### Categories recurring controls (implemented)
 
 - `/categories` is now a master–detail page. Left column: the grouped **Regular categories** card with `Spending` / `Ideal` column labels; each row is a selectable button (highlighted when selected) with a compact **Repeat** toggle (orange = on, muted = off; `onToggleRecurring`). Group headers show `spent / budget`.
@@ -226,7 +225,8 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Loan metadata is dropped from the UI entirely, including the loan-only fields in the Add-account form. `accounts/page.tsx` no longer selects them and `addAccount`'s four loan fields are now optional. `updateAccount` remains exported but is no longer called from the client.
 - The DB columns `accounts.{original_amount,interest_rate,monthly_payment,start_date}` and their existing data are **preserved** (no schema change, no migration); the app simply stops reading/writing them.
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
-=======
+- Superseded by the Accounts page redesign below (which reuses `accounts.original_amount` for the loan paid-off bar).
+
 ### Accounts page redesign (implemented)
 
 - Full redesign of `/accounts` (`src/app/accounts/accounts-client.tsx`): header (title · `MonthNav` · "Changes vs `<latest earlier month with balances>`"), four flat summary cards (Liquid / Retirement / Debt / Net worth — compact, colored dot, ~28px tabular value, change chip; **Net worth is intentionally not emphasized/dark**), and a single **Balances for `<Month Year>`** card with helper text, save status, "Carry forward from `<prev>`", and a **⋯** menu (Clear balances for this month w/ confirm · Show archived · Skip/Unskip this month).
@@ -237,7 +237,12 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - New pure helpers in `src/lib/accounts.ts` (`parseBalanceInput`, `formatBalance`, `deltaInfo`, `sharePercent`, `payoffInfo`, `previousRecordedMonth`, `latestBalanceBefore`, `carryForwardItems`, `GROUP_ORDER`). Empty states cover "no accounts" and "no balances yet for `<month>`".
 - `accounts/page.tsx` now selects `original_amount` only and passes `householdId`; `addAccount`'s loan fields are optional (reused the existing `accounts.original_amount` — **no migration, no schema/RLS change, no data touched**). Unit tests were skipped (no test runner in the repo).
 - `npm run lint` + `npm run build` pass. No runtime smoke test; Realtime and autosave were not exercised against the live DB.
->>>>>>> feat/accounts-redesign
+- Merged to `main` as `db7d995` (`Merge feat/accounts-redesign`); the full-width page change is in `4832bf5`.
+
+### Post-account-redesign session update (2026-10-19)
+
+- Accounts redesign completed on `feat/accounts-redesign` (subgrid + relative 62% bars + group-total centering + 13rem fixed column) and merged to `main` (`db7d995`) together with the full-width page change (`4832bf5`).
+- The `/expenses` redesign was attempted but failed because the groups fetch captured settings in the wrong order; it was fully reverted to `2cb7dd5` (`a83adcc` records the revert).
 
 ## Checks
 
@@ -249,10 +254,9 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
-- Branch `feat/categories-recurring-controls` is pushed but unmerged; PR #20 pending.
 
 ## Next action
 
-- **Merge PR #20 (squash) to `main`** so Vercel deploys from `main` (branch `feat/categories-recurring-controls`).
+- Redo the `/expenses` layout (4 widgets + input card + grouped categories) in `/expenses` files only, fixing the groups/settings fetch order.
 - Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
 - Optionally clean up the untracked root SVG duplicates and add the inline Icon picker to any other surfaces that show category icons.
