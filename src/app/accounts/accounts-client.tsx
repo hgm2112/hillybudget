@@ -9,7 +9,7 @@ import { monthLabel, monthName } from "@/lib/month";
 import {
   carryForwardItems,
   deltaInfo,
-  formatBalance,
+  formatCurrencyInput,
   GROUP_ORDER,
   latestBalanceBefore,
   parseBalanceInput,
@@ -220,7 +220,7 @@ export function AccountsClient({
   useEffect(() => {
     const savedString = (accountId: string) => {
       const value = savedByAccount.get(accountId);
-      return value === undefined ? "" : String(value);
+      return value === undefined ? "" : formatCurrencyInput(value);
     };
     if (isSkipped) {
       seededMonth.current = null;
@@ -335,7 +335,7 @@ export function AccountsClient({
     const raw = draftsRef.current[accountId] ?? "";
     const parsed = raw.trim() === "" ? null : parseBalanceInput(raw);
     if (parsed !== null) {
-      const formatted = formatBalance(parsed);
+      const formatted = formatCurrencyInput(parsed);
       if (formatted !== raw) setDrafts((previous) => ({ ...previous, [accountId]: formatted }));
     }
     void commit(accountId);
@@ -364,7 +364,7 @@ export function AccountsClient({
     }
     const next = { ...draftsRef.current };
     for (const item of items) {
-      next[item.accountId] = formatBalance(item.balance);
+      next[item.accountId] = formatCurrencyInput(item.balance);
       dirtyRef.current.delete(item.accountId);
     }
     setDrafts(next);
@@ -494,7 +494,7 @@ export function AccountsClient({
             onChange={(event) => onInputChange(account.id, event.target.value)}
             onBlur={() => onBlur(account.id)}
             onKeyDown={(event) => onInputKeyDown(event, account.id)}
-            placeholder={previous !== null ? formatBalance(previous) : "0.00"}
+            placeholder={previous !== null ? formatCurrencyInput(previous) : "0.00"}
             className="text-center tabular-nums"
           />
         </div>

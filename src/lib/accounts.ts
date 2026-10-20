@@ -30,6 +30,10 @@ export function formatBalance(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+export function formatCurrencyInput(value: number): string {
+  return `$${formatBalance(value)}`;
+}
+
 export type DeltaInfo = {
   delta: number;
   percent: number | null;
