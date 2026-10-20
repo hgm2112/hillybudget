@@ -251,6 +251,12 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Balance inputs now display **`$` + thousands separators** (`$12,696`): new `formatCurrencyInput` in `src/lib/accounts.ts`, used by the month seed, the Realtime reconcile effect, `onBlur`, "Carry forward", and previous-month placeholders. Saved values are unchanged — `parseBalanceInput` already strips `$`/commas and still supports arithmetic (`12000+450`).
 - `npm run lint` + `npm run build` pass. No runtime smoke test.
 
+### Account colors follow their group (2026-10-20)
+
+- `GROUP_COLORS` moved from `accounts-client.tsx` into `src/lib/accounts.ts` (single source). Group colors stay fixed: Liquid `#4A7BA3`, Retirement `#7767A6`, Loan `#D85700`; not user-editable.
+- Add/Edit Account no longer has a Color picker. The saved `accounts.color` is always set to the account's group color (`GROUP_COLORS[kind]`), so editing/saving normalizes any old value to the group color. The `/accounts` row dot already renders `GROUP_COLORS[account.kind]`.
+- Account "groups" are the hardcoded `account_kind` enum (`liquid`, `retirement`, `loan`) — no group table/UI; a new household starts with no group headers, and `+ Add account` → Type is how an account enters a group.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
