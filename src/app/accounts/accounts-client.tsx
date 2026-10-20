@@ -627,22 +627,18 @@ export function AccountsClient({
           <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
             {groups.map((group) => (
               <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_13rem] md:gap-x-5 md:px-4">
-                <div className="flex items-center gap-5 px-4 py-1.5 md:col-span-full md:grid md:grid-cols-subgrid md:px-0 md:gap-y-0">
-                  <div className="flex items-center gap-3 md:col-start-1">
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
-                      style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
-                    >
-                      {GROUP_LABELS[group.kind]}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
-                    </span>
-                  </div>
-                  <div className="ml-auto flex items-center gap-3 md:col-start-2 md:ml-0 md:justify-start">
-                    <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
-                    {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
-                  </div>
+                <div className="flex items-center gap-3 px-4 py-1.5 md:col-span-full md:px-0">
+                  <span
+                    className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
+                    style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
+                  >
+                    {GROUP_LABELS[group.kind]}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
+                  {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
                 </div>
                 {group.list.map((account) => renderRow(account, group))}
               </div>
