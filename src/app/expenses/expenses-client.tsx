@@ -301,7 +301,7 @@ export function ExpensesClient({
     });
   }
 
-  function renderCategoryBox(category: Category) {
+  function renderCategoryBox(category: Category, group: Group) {
     const list = filteredEntries(category.id);
     const total = list.reduce((sum, entry) => sum + entry.amount, 0);
     const ideal = idealByCategory[category.id] ?? 0;
@@ -344,7 +344,7 @@ export function ExpensesClient({
           className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2 text-left"
           onClick={toggle}
         >
-          <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
+          <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
             {ideal > 0 && (
@@ -400,12 +400,15 @@ export function ExpensesClient({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-3">
+      <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-2xl font-semibold">Expenses</h1>
           {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
-        <MonthNav value={month} months={months} onSelect={goToMonth} />
+        <div className="flex justify-center">
+          <MonthNav value={month} months={months} onSelect={goToMonth} />
+        </div>
+        <div />
       </div>
 
       {error && <p className="my-3 text-sm text-red-600">{error}</p>}
@@ -480,7 +483,7 @@ export function ExpensesClient({
                         <span className="font-heading text-sm font-bold">{group.name}</span>
                         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{money(groupSpent)}</span>
                       </div>
-                      {groupCategories.map((category) => renderCategoryBox(category))}
+                      {groupCategories.map((category) => renderCategoryBox(category, group))}
                     </div>
                   );
                 })
