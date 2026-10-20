@@ -244,6 +244,13 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Accounts redesign completed on `feat/accounts-redesign` (subgrid + relative 62% bars + group-total centering + 13rem fixed column) and merged to `main` (`db7d995`) together with the full-width page change (`4832bf5`).
 - The `/expenses` redesign was attempted but failed because the groups fetch captured settings in the wrong order; it was fully reverted to `2cb7dd5` (`a83adcc` records the revert).
 
+### Accounts alignment, header total, and formatted inputs (2026-10-20)
+
+- PR #25 (`fix/accounts-group-alignment`): the group total/chip keeps its position in the balances card; the 62% progress tracks (share-of-group and loan payoff) are now **left-aligned** in their column so they sit under the group totals. An earlier attempt centered the total over the bars was reverted (`e515a80` → `4babe75`).
+- PR #26 (`feat/accounts-header-and-input-format`): in the `/accounts` grouped balances, the group total + change chip moved inline right after the account count — `[LIQUID] [6 accounts] $107,684 [+$11,096]`; the group header is a single full-span flex row (dropped the subgrid column split).
+- Balance inputs now display **`$` + thousands separators** (`$12,696`): new `formatCurrencyInput` in `src/lib/accounts.ts`, used by the month seed, the Realtime reconcile effect, `onBlur`, "Carry forward", and previous-month placeholders. Saved values are unchanged — `parseBalanceInput` already strips `$`/commas and still supports arithmetic (`12000+450`).
+- `npm run lint` + `npm run build` pass. No runtime smoke test.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.
