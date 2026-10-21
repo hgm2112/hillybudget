@@ -6,12 +6,14 @@ export default async function DashboardPage() {
   const { household_id } = await requireHousehold();
   const supabase = await createClient();
 
-  const [{ data: categories }, { data: totals }, { data: accounts }, { data: balances }] = await Promise.all([
-    supabase.from("categories").select("id, name, color, kind").eq("household_id", household_id),
-    supabase.from("monthly_category_totals").select("category_id, month, total").eq("household_id", household_id),
-    supabase.from("accounts").select("id, name, kind").eq("household_id", household_id),
-    supabase.from("account_balances").select("account_id, month, balance").eq("household_id", household_id),
-  ]);
+  const [{ data: categories }, { data: totals }, { data: accounts }, { data: balances }, { data: paused }] =
+    await Promise.all([
+      supabase.from("categories").select("id, name, color, kind").eq("household_id", household_id),
+      supabase.from("monthly_category_totals").select("category_id, month, total").eq("household_id", household_id),
+      supabase.from("accounts").select("id, name, kind").eq("household_id", household_id),
+      supabase.from("account_balances").select("account_id, month, balance").eq("household_id", household_id),
+      supabase.from("paused_months").select("month").eq("household_id", household_id),
+    ]);
 
   return (
     <main className="min-h-screen">
@@ -37,6 +39,7 @@ export default async function DashboardPage() {
           month: balance.month,
           balance: Number(balance.balance),
         }))}
+        pausedMonths={(paused ?? []).map((row) => row.month)}
       />
     </main>
   );

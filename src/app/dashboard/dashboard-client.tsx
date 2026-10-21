@@ -25,7 +25,8 @@ import {
 } from "recharts";
 import { cn } from "cn";
 import { money, moneyCompact } from "@/lib/money";
-import { monthLabel, monthRange, shiftMonth, toMonthKey } from "@/lib/month";
+import { monthLabel, toMonthKey } from "@/lib/month";
+import { PERIODS, earliestMonth, latestMonth, windowMonths, type Period } from "@/lib/periods";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 
@@ -34,15 +35,6 @@ type Category = { id: string; name: string; color: string; kind: CategoryKind };
 type Total = { category_id: string; month: string; total: number };
 type Account = { id: string; name: string; kind: "liquid" | "retirement" | "loan" };
 type Balance = { account_id: string; month: string; balance: number };
-
-const PERIODS = [
-  { key: "3M", months: 3 },
-  { key: "6M", months: 6 },
-  { key: "12M", months: 12 },
-  { key: "YTD", months: 0 },
-  { key: "LIFETIME", months: 0 },
-] as const;
-type Period = (typeof PERIODS)[number]["key"];
 
 const INCOME = "#10b981";
 const EXPENSE = "#ef4444";
@@ -67,62 +59,44 @@ function rangeLabel(months: string[]) {
   return `${first} – ${last}`;
 }
 
-function windowMonths(period: Period, anchor: string, floor: string) {
-  if (period === "YTD") {
-    const months: string[] = [];
-    let cursor = `${anchor.slice(0, 4)}-01-01`;
-    while (cursor <= anchor) {
-      months.push(cursor);
-      cursor = shiftMonth(cursor, 1);
-    }
-    return months;
-  }
-  if (period === "LIFETIME") {
-    return floor && floor < anchor ? monthRange(floor, anchor) : [anchor];
-  }
-  const count = PERIODS.find((entry) => entry.key === period)?.months ?? 12;
-  return Array.from({ length: count }, (_, index) => shiftMonth(anchor, index - (count - 1)));
-}
-
 export function DashboardClient({
   categories,
   totals,
   accounts,
   balances,
+  pausedMonths,
 }: {
   categories: Category[];
   totals: Total[];
   accounts: Account[];
   balances: Balance[];
+  pausedMonths: string[];
 }) {
   const [period, setPeriod] = useState<Period>("12M");
+  const paused = useMemo(() => new Set(pausedMonths), [pausedMonths]);
 
-  const flowAnchor = useMemo(() => {
-    let latest = "";
-    for (const row of totals) if (row.month > latest) latest = row.month;
-    return latest || toMonthKey(new Date());
-  }, [totals]);
+  const flowAnchor = useMemo(
+    () => latestMonth(totals.map((row) => row.month), paused, toMonthKey(new Date())),
+    [totals, paused]
+  );
 
-  const netAnchor = useMemo(() => {
-    let latest = "";
-    for (const balance of balances) if (balance.month > latest) latest = balance.month;
-    return latest || toMonthKey(new Date());
-  }, [balances]);
+  const netAnchor = useMemo(
+    () => latestMonth(balances.map((balance) => balance.month), new Set(), toMonthKey(new Date())),
+    [balances]
+  );
 
-  const flowFloor = useMemo(() => {
-    let earliest = "";
-    for (const row of totals) if (!earliest || row.month < earliest) earliest = row.month;
-    return earliest;
-  }, [totals]);
+  const flowFloor = useMemo(() => earliestMonth(totals.map((row) => row.month), paused), [totals, paused]);
 
-  const netFloor = useMemo(() => {
-    let earliest = "";
-    for (const balance of balances) if (!earliest || balance.month < earliest) earliest = balance.month;
-    return earliest;
-  }, [balances]);
+  const netFloor = useMemo(() => earliestMonth(balances.map((balance) => balance.month), new Set()), [balances]);
 
-  const flowMonths = useMemo(() => windowMonths(period, flowAnchor, flowFloor), [period, flowAnchor, flowFloor]);
-  const netMonths = useMemo(() => windowMonths(period, netAnchor, netFloor), [period, netAnchor, netFloor]);
+  const flowMonths = useMemo(
+    () => windowMonths(period, flowAnchor, flowFloor, paused),
+    [period, flowAnchor, flowFloor, paused]
+  );
+  const netMonths = useMemo(
+    () => windowMonths(period, netAnchor, netFloor),
+    [period, netAnchor, netFloor]
+  );
 
   const kindById = useMemo(() => new Map(categories.map((category) => [category.id, category.kind])), [categories]);
   const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);

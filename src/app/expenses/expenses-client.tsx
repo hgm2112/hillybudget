@@ -10,6 +10,7 @@ import { deltaInfo, type DeltaInfo } from "@/lib/accounts";
 import { MonthNav } from "@/components/month-nav";
 import { BackupReminder } from "@/components/backup-reminder";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { addEntries, clearMonth, deleteEntry, fillRecurring, updateEntry, type ActionResult } from "./actions";
+import { addEntries, clearMonth, deleteEntry, fillRecurring, pauseMonth, resumeMonth, updateEntry, type ActionResult } from "./actions";
 
 type Category = {
   id: string;
@@ -133,6 +134,7 @@ export function ExpensesClient({
   groups,
   previousTotals,
   prevMonth,
+  pausedMonths,
 }: {
   householdId: string;
   month: string;
@@ -144,6 +146,7 @@ export function ExpensesClient({
   groups: Group[];
   previousTotals: PreviousTotals;
   prevMonth: string | null;
+  pausedMonths: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -157,6 +160,8 @@ export function ExpensesClient({
   const [confirmClear, setConfirmClear] = useState(false);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
+  const pausedSet = useMemo(() => new Set(pausedMonths), [pausedMonths]);
+  const isPaused = pausedSet.has(month);
 
   useEffect(() => {
     const supabase = createClient();
@@ -480,12 +485,20 @@ export function ExpensesClient({
       <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-2xl font-semibold">Expenses</h1>
+          {isPaused && <Badge variant="secondary">Paused</Badge>}
           {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
         <div className="flex justify-center">
-          <MonthNav value={month} months={months} onSelect={goToMonth} />
+          <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
         </div>
-        <div />
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            onClick={() => run(isPaused ? resumeMonth(month) : pauseMonth(month))}
+          >
+            {isPaused ? "Resume month" : "Pause month"}
+          </Button>
+        </div>
       </div>
 
       <BackupReminder householdId={householdId} />
@@ -557,6 +570,12 @@ export function ExpensesClient({
           <div>
             <h2 className="text-sm font-semibold">Expenses for {monthLabel(month)}</h2>
             <p className="text-xs text-muted-foreground">Type an amount, then Shift+Enter to continue to another amount.</p>
+            {isPaused && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                This month is paused. Its entries are still saved and editable, but it does not
+                count toward the dashboard or the stats.
+              </p>
+            )}
           </div>
         </div>
 

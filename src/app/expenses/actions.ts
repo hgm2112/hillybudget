@@ -77,6 +77,40 @@ export async function deleteEntry(id: string): Promise<ActionResult> {
   return {};
 }
 
+export async function pauseMonth(month: string): Promise<ActionResult> {
+  if (!MONTH_RE.test(month)) return { error: "Invalid month." };
+  const { supabase, householdId } = await context();
+
+  const { error } = await supabase
+    .from("paused_months")
+    .upsert({ household_id: householdId, month }, { onConflict: "household_id,month" });
+  if (error) return { error: error.message };
+
+  revalidatePath("/expenses");
+  revalidatePath("/dashboard");
+  revalidatePath("/stats");
+  revalidatePath("/categories");
+  return {};
+}
+
+export async function resumeMonth(month: string): Promise<ActionResult> {
+  if (!MONTH_RE.test(month)) return { error: "Invalid month." };
+  const { supabase, householdId } = await context();
+
+  const { error } = await supabase
+    .from("paused_months")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("month", month);
+  if (error) return { error: error.message };
+
+  revalidatePath("/expenses");
+  revalidatePath("/dashboard");
+  revalidatePath("/stats");
+  revalidatePath("/categories");
+  return {};
+}
+
 export async function clearMonth(month: string): Promise<ActionResult> {
   if (!MONTH_RE.test(month)) return { error: "Invalid month." };
   const { supabase, householdId } = await context();

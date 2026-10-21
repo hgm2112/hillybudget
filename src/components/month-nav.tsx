@@ -15,12 +15,15 @@ export function MonthNav({
   value,
   months,
   onSelect,
+  pausedMonths = [],
 }: {
   value: string;
   months: string[];
   onSelect: (month: string) => void;
+  pausedMonths?: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const paused = new Set(pausedMonths);
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +50,7 @@ export function MonthNav({
         <DropdownMenuContent align="start" className="max-h-72">
           {months.map((month) => {
             const isCurrent = month === value;
+            const isPaused = paused.has(month);
             return (
               <DropdownMenuItem
                 key={month}
@@ -55,6 +59,7 @@ export function MonthNav({
                 onClick={() => onSelect(month)}
               >
                 {monthLabel(month)}
+                {isPaused && <span className="ml-auto text-xs text-muted-foreground">Paused</span>}
               </DropdownMenuItem>
             );
           })}
