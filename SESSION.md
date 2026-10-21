@@ -263,8 +263,10 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Removed the "Track and manage your household expenses…" subtext and the "No entries recorded for…" banner.
 - `All cards` / `Add recurring items` / `By card` moved under the widgets.
 - One card titled `Expenses for {Month Year}` with helper `Type an amount, then Shift+Enter to continue to another amount.`; the grouped expense rows and the Income section live inside it. By-card view unchanged.
-- Expense categories are grouped by `categories.group_id` using the existing `category_groups` (name + color + spent total, simple header, no collapse), with an `Ungrouped` fallback — same shape as `/categories`. `page.tsx` now queries `category_groups` and selects `group_id`.
-- `npm run lint` + `npm run build` pass. No runtime smoke test.
+- Header uses the `/accounts` 3-zone grid (title left, `MonthNav` centered, empty right) with `mb-4`; `All cards` / `Add recurring items` / `By card` sit under the widgets.
+- Expense categories are grouped by `categories.group_id` using the existing `category_groups`, with an `Ungrouped` fallback — same shape as `/categories`. `page.tsx` now queries `category_groups` and selects `group_id`.
+- Group headers use `.group-tint` (group color) with a `size-3.5` dot and `text-base font-bold` name; category row dots are `size-2.5` and colored with the **group** color.
+- **Live search bar** (first in the action row): filters by category name (case-insensitive) as you type; hides non-matching categories, auto-expands matches, filters entries in By-card view, and combines with the card filter. `npm run lint` + `npm run build` pass. No runtime smoke test.
 
 ## Checks
 

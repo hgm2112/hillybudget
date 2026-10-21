@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, moneyWhole, parseAmountExpression } from "@/lib/money";
 import { monthLabel, monthName } from "@/lib/month";
@@ -110,6 +110,8 @@ export function ExpensesClient({
   const [newIncome, setNewIncome] = useState({ categoryId: "", amount: "" });
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLowerCase();
 
   useEffect(() => {
     const supabase = createClient();
@@ -170,6 +172,28 @@ export function ExpensesClient({
     }
     return list.filter((entry) => entry.categories.length > 0);
   }, [groups, expenseCategories]);
+
+  const visibleGroups = useMemo(() => {
+    if (!query) return groupsWithCategories;
+    return groupsWithCategories
+      .map(({ group, categories }) => ({
+        group,
+        categories: categories.filter((category) => category.name.toLowerCase().includes(query)),
+      }))
+      .filter((entry) => entry.categories.length > 0);
+  }, [groupsWithCategories, query]);
+
+  const visibleCards = useMemo(() => {
+    const list = [...cards, { id: "none", name: "No card", color: "#6b7280" }];
+    if (!query) return list;
+    return list.filter((card) =>
+      expenseEntries.some(
+        (entry) =>
+          (entry.card_id ?? "none") === card.id &&
+          (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query)
+      )
+    );
+  }, [cards, expenseEntries, query, categoryById]);
 
   const filteredEntries = useCallback(
     (categoryId: string) =>
@@ -307,7 +331,7 @@ export function ExpensesClient({
     const ideal = idealByCategory[category.id] ?? 0;
     const idealRounded = Math.round(ideal);
     const difference = total - idealRounded;
-    const isOpen = expanded.has(category.id);
+    const isOpen = query !== "" || expanded.has(category.id);
     const quickKey = category.id;
     const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
 
@@ -440,6 +464,16 @@ export function ExpensesClient({
       </div>
 
       <div className="my-3 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search categories"
+            placeholder="Search categories…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-8 w-full pl-8 text-sm sm:w-48"
+          />
+        </div>
         {viewMode === "category" && (
           <select
             aria-label="Card filter"
@@ -473,8 +507,10 @@ export function ExpensesClient({
             <div className="space-y-3">
               {groupsWithCategories.length === 0 ? (
                 <p className="py-2 text-sm text-muted-foreground">No expense categories yet. Add one on the Categories page.</p>
+              ) : visibleGroups.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">No categories match “{search.trim()}”.</p>
               ) : (
-                groupsWithCategories.map(({ group, categories: groupCategories }) => {
+                visibleGroups.map(({ group, categories: groupCategories }) => {
                   const groupSpent = groupCategories.reduce((sum, category) => sum + categoryTotal(category.id), 0);
                   return (
                     <div key={group.id || "ungrouped"} className="space-y-1">
@@ -494,9 +530,16 @@ export function ExpensesClient({
             </div>
           ) : (
             <div className="space-y-1">
-              {[...cards, { id: "none", name: "No card", color: "#6b7280" }].map((card) => {
-                const cardEntries = expenseEntries.filter((entry) => (entry.card_id ?? "none") === card.id);
-                const subtotal = cardTotals.get(card.id) ?? 0;
+              {visibleCards.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">No matches for “{search.trim()}”.</p>
+              ) : (
+                visibleCards.map((card) => {
+                const cardEntries = expenseEntries.filter(
+                  (entry) =>
+                    (entry.card_id ?? "none") === card.id &&
+                    (!query || (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query))
+                );
+                const subtotal = query ? cardEntries.reduce((sum, entry) => sum + entry.amount, 0) : cardTotals.get(card.id) ?? 0;
                 const quickKey = `card:${card.id}`;
                 const quickState = quick[quickKey] ?? { amount: "", cardId: card.id, categoryId: expenseCategories[0]?.id ?? "" };
 
@@ -559,7 +602,8 @@ export function ExpensesClient({
                     </div>
                   </div>
                 );
-              })}
+                })
+              )}
             </div>
           )}
 
