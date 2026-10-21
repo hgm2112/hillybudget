@@ -10,7 +10,6 @@ import { deltaInfo, type DeltaInfo } from "@/lib/accounts";
 import { MonthNav } from "@/components/month-nav";
 import { BackupReminder } from "@/components/backup-reminder";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -485,20 +484,12 @@ export function ExpensesClient({
       <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-2xl font-semibold">Expenses</h1>
-          {isPaused && <Badge variant="secondary">Paused</Badge>}
           {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
         <div className="flex justify-center">
           <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
         </div>
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            onClick={() => run(isPaused ? resumeMonth(month) : pauseMonth(month))}
-          >
-            {isPaused ? "Resume month" : "Pause month"}
-          </Button>
-        </div>
+        <div />
       </div>
 
       <BackupReminder householdId={householdId} />
@@ -562,7 +553,17 @@ export function ExpensesClient({
           </Button>
           <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
         </div>
-        <Button variant="outline" className="ml-auto" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
+        <div className="ml-auto flex items-center gap-2">
+          {isPaused ? (
+            <div className="flex flex-col items-end gap-1.5">
+              <p className="text-2xl font-bold text-muted-foreground">PAUSED</p>
+              <Button variant="outline" onClick={() => run(resumeMonth(month))}>Resume</Button>
+            </div>
+          ) : (
+            <Button variant="outline" onClick={() => run(pauseMonth(month))}>Pause month</Button>
+          )}
+          <Button variant="outline" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card">
