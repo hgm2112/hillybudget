@@ -271,6 +271,7 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **By-card is read-only**: entry rows render without the Edit/Delete dropdown (`renderEntryRow` gained an `editable` flag) and the per-card quick-add row was removed — By-card is now a view-only recap per card; all editing stays in category view and the Income section.
 - **Clear expenses** button in the action row: `clearMonth(month)` server action deletes all expense-`ledger_entries` for the viewed month (income untouched), behind a local `ConfirmDialog` (same pattern as `/accounts`). Useful for re-testing `Add recurring items` on a month. It is pushed to the right edge of the action row (`ml-auto`) and sits alone there; the left controls are grouped (search, card filter, `By card` between `All cards` and `Add recurring items`) so they wrap independently and never drag `By card` to the right side.
 - **Ideal numbers faded 50%** site-wide (`opacity-50`): the /expenses ideal column (ideal + over/under chip together), the /categories table Ideal cell, and the /categories panel Ideal/Difference stats. Editable controls and the ideal-window setting stay full strength. `npm run lint` + `npm run build` pass. No runtime smoke test.
+- /categories list-card header renamed from "Regular categories" to **"Groups + Categories"**.
 
 ## Checks
 

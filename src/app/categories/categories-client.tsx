@@ -293,7 +293,7 @@ export function CategoriesClient({
             <Card>
               <CardContent className="space-y-1 p-4">
                 <div className="-mx-4 flex items-center gap-2 px-5 py-1">
-                  <span className="min-w-0 truncate text-base font-bold">Regular categories</span>
+                  <span className="min-w-0 truncate text-base font-bold">Groups + Categories</span>
                   <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs">
                     <span className="w-20 text-right text-muted-foreground">Ideal</span>
                     <span className="w-20 text-right text-muted-foreground">Spending</span>
