@@ -331,7 +331,8 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - The cron from `vercel.json` (`/api/keepalive`, `0 9 */3 * *`) is **registered and enabled** on the project (`crons.definitions`, `disabledAt: null`).
 - **Live smoke test (read-only, unauthenticated):** `/`, `/login`, `/dashboard`, `/expenses` → 200; `/api/keepalive` → 401 without the secret, `{"ok":true,...}` with it. The service-role route works against the live DB. Authenticated page walks are still unverified.
 - `vercel env ls` shows only the 4 expected vars; the uploaded build contains no `.env*`, `.xlsx`, or backup files; the working tree is clean (`.env.local` picked up a `VERCEL_OIDC_TOKEN` from the CLI — still untracked).
-- **GitHub auto-deploy:** the repo is **not yet connected** — `vercel git connect` and `POST /v9/projects/{id}/link` both fail with "you need to install the GitHub integration first" (the Vercel GitHub App is not installed on the `hgm2112` GitHub account). Pending: install the Vercel GitHub App (https://github.com/apps/vercel) for the `hillybudget` repo, then `vercel git connect` and set the production branch to `main` with Preview Deployments off.
+- **GitHub auto-deploy: DONE.** The Vercel GitHub App was installed for the `hillybudget` repo and `vercel git connect` succeeded. Project `link` = `{type: github, repo: hillybudget, org: hgm2112, productionBranch: main}`; `previewDeploymentsDisabled = true` (set via `PATCH /v9/projects/{id}` — it is a project setting, not a `vercel.json` option), `gitForkProtection` on.
+- **Auto-deploy verified end-to-end:** merging PR #34 to `main` (commit `af727bf`) produced a new Production deployment (`hillybudget-n3c81b57e-riseandshine.vercel.app`, Ready in 22s) with the aliases `hillybudget.vercel.app`, `hillybudget-riseandshine.vercel.app` and `hillybudget-git-main-riseandshine.vercel.app`; the commit SHA on the production target matches the merge commit. `main` is the only branch that deploys.
 - `AGENTS.md` updated: corrected the "preview deployments are disabled in `vercel.json`" claim (it is a project setting), added a Deployment section, and fixed the migration head (`0001`–`0012`, not `0001`–`0010`).
 
 ## Checks
@@ -341,17 +342,18 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 
 ## Known issues and unfinished work
 
-- **No runtime smoke-testing has been done** for the pre-restore phases: those were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
+- **No runtime smoke-testing has been done** for the pre-restore phases: those were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and the authenticated pages are still untested against the live database — the deployed site has only been checked unauthenticated (`/login` 200, keepalive 401/200).
 - **The restore path has now executed once, successfully**, against the live project (2026-10-21) — see "Restore — first successful restore". What is still unverified: the local-DB e2e suite (`tests/restore-e2e.mjs`, ~50 assertions) has never been run (no Docker; the user declined), so the failure/rollback paths have only been reasoned about, not exercised.
 - **No "leave/delete household" action exists.** The restored duplicate (`WHill (restored 2026-10-21)`) can only be removed by a manual cascade delete, which needs explicit approval; there is no UI for it.
 - Each additional confirmed restore creates **another** household (by design — restore never overwrites). The Settings switcher moves between them; the default (no cookie) is the oldest membership, i.e. `WHill`.
 - The RPC still requires all **12** backup sections although it consumes 10 (`households` and `household_members` travel as passthrough); a future `0013` could narrow the list, but the app currently sends all 12 to match the deployed contract.
-- `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
-- Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
+- `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it requires `Authorization: Bearer $CRON_SECRET`, and `CRON_SECRET` **is now set** in Vercel (verified 401 without / 200 with). Rotate it with `vercel env add CRON_SECRET --environment production --force`.
+- The duplicate brand SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) are **tracked** in git and duplicate `public/brand/`; they are deployed with the app. Delete them from the repo and keep only `public/brand/`.
 - The user's backup file `hillybudget-backup-2026-10-21(2).json` (plus its Windows `Zone.Identifier` artifact) sits in the repo root; both are git-ignored (`.gitignore:49`) and must stay untracked. Consider moving the file out of the repo.
 
 ## Next action
 
+- **Log in on https://hillybudget.vercel.app** and walk the live app (dashboard, expenses, categories, accounts, stats, Settings → Data & Backups + Restore preview) — the first real runtime smoke test of the deployed app.
 - Invite the other member into `WHill (restored 2026-10-21)` with invite code `20C41CEC` (the original `WHill` code `90EE9B4F` is unchanged) — the user is currently staying in `WHill` and will switch when ready.
 - Decide whether to keep the restored duplicate long-term, and if not, scope a household-deletion feature (cascades to that household's rows only) for review before any SQL.
 - Optionally run the disposable-stack e2e (`npx supabase start && npx supabase db reset && npm run test:e2e`) at some point to cover the failure/rollback paths that the live run did not exercise.
