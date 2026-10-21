@@ -294,19 +294,30 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Checks: `npm run lint`, `npm run test` (12/12), `npm run build` all pass. Real-backup spot check skipped — the user's downloaded JSON was moved out of the workspace. Route registered at `/api/restore/preview`. Not verified: live route against the deployed DB (needs an authenticated session); execution path does not exist yet (Phase B).
 - The user's real home household has 1 member row in the (moved) backup; re-export after the husband joins for membership completeness.
 
+## Restore — Phase B (2026-10-21)
+
+- **Approved plan implemented** (migration NOT yet applied to the remote project; `supabase db push` awaits explicit approval of the reviewed SQL).
+- `supabase/migrations/0011_restore_backup.sql` (new): single-transaction `security definer` plpgsql RPC `restore_into_new_household(p_payload jsonb)` → jsonb `{household_id, household_name, invite_code, counts}`. No `household_id` parameter exists, so it cannot target an arbitrary household: authorization is `auth.uid()` + owner-of-active-(oldest)-membership, same gate as the preview/import RPC; per-user advisory lock; pre-insert structural validation (shape, all 12 sections, ≤1 settings row, duplicate IDs, in-file FK integrity) so an invalid payload never writes; then fresh household (new uuid, name from file, fresh invite code — same loop as `create_household`) + owner membership + settings, then dependency-order inserts (groups → categories → cards → accounts → recurring → skipped → archive periods → ledger → balances) with original row IDs, remapped household_id, timestamps preserved, `created_by` kept only when the auth user exists, `import_batch_id` never restored; row-count diagnostics guard every insert. DB constraints/triggers backstop the rest (month checks, numeric overflow, `unique(household_id, name)`, `set_ledger_kind` corrects entry kind, `assert_ledger_refs`). Grants: revoked from public/anon, granted to authenticated. `households`/`household_members`/`profiles`/auth rows are never imported.
+- `src/app/api/restore/confirm/route.ts` (new): owner-gated POST route; re-reads the file text and re-runs the full Phase A validator server-side (never trusts the preview or client data), 25MB cap, then calls the RPC with the **server-validated** payload; returns `{restored: {householdId, householdName, inviteCode, counts}}` or a clean error (422).
+- `src/app/settings/restore-client.tsx`: confirm step added — household name, export date, per-table counts, warnings, "creates a new household; your current household stays exactly as-is", **Restore as New Household** button (double submission disabled while in flight); success state shows record total, new household name, invite code, a **Switch to restored household** button, and how-to-switch wording — only after the RPC commits.
+- **Cookie-based household switcher** (approved choice): `getHousehold()` in `src/lib/session.ts` now honors an httpOnly `hillybudget:household` cookie (uuid-validated, membership re-checked via RLS) before falling back to oldest-membership; new server action `switchHousehold(id)` in `src/app/settings/actions.ts` verifies membership, sets the cookie (1 year), revalidates the layout; `src/app/settings/switch-household.tsx` adds a compact **Switch household** card to Settings (only shows when the user has >1 household). No schema/RLS/auth changes. Restore success can switch, landing on `/dashboard` in the restored household; until then the old household stays active.
+- `tests/fixtures/restore-fixture.json` + `tests/restore-e2e.mjs` (new, ~50 assertions): happy-path restore with field-for-field preservation checks across all 10 data tables (IDs, timestamps, kind correction, created_by nulling/preservation, import_batch_id removal, settings ideal_window), exactly-one-household-added + current-household-untouched, RLS isolation (member cannot see/write the restored household), non-owner rejection, anon rejection, 9 atomic-rejection cases (bad version/app, missing section, dup ids, broken FK, dup category names, bad month, amount overflow, missing required field) with zero households left behind, retry behavior (distinct households). **Performance note: these tests could NOT be run here** — Docker and the supabase CLI are unavailable in this environment, so there is no disposable local Supabase stack. Run later with `npx supabase start && npx supabase db reset` then `npm run test:e2e` (env vars in the file header). `package.json` gained `test:e2e`. Nothing was run against the production project.
+- Checks: `npm run lint`, `npm test` (12/12), `npm run build` pass; `/api/restore/confirm` registered. Not run: local-DB e2e (blocked, above), migration applied to remote (awaiting approval), runtime smoke test of the restore UI.
+
 ## Checks
 
-- `npm run lint` and `npm run build` pass after every phase.
-- Migrations `0001`–`0010` are applied to the live project (`supabase migration list`: local = remote).
+- `npm run lint`, `npm test`, and `npm run build` pass after every phase.
+- Migrations `0001`–`0010` are applied to the live project (`supabase migration list`: local = remote). `0011` is written but NOT applied (approval pending).
 
 ## Known issues and unfinished work
 
-- **No runtime smoke-testing has been done.** All phases were verified only via lint + build. Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
+- **No runtime smoke-testing has been done.** All phases were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
+- **Restore Phase B is untested against a database.** Local Supabase (Docker + CLI) is unavailable; `tests/restore-e2e.mjs` has never been executed. Run it on a disposable stack before trusting restore in production.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
 
 ## Next action
 
-- Redo the `/expenses` layout (4 widgets + input card + grouped categories) in `/expenses` files only, fixing the groups/settings fetch order.
-- Run an end-to-end runtime smoke test against the live project (create household, add categories/cards, add ledger entries, verify Realtime refresh, accounts balances, skip-month, stats, and import preview/confirm).
-- Optionally clean up the untracked root SVG duplicates and add the inline Icon picker to any other surfaces that show category icons.
+- Approve `supabase/migrations/0011_restore_backup.sql` (full SQL delivered in the Phase B review) and apply with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`.
+- Install Docker + supabase CLI, run `npx supabase start && npx supabase db reset && npm run test:e2e` (disposable local stack only).
+- Then merge PRs #30/#31/#32 as desired and smoke-test restore on staging/local before real use.
