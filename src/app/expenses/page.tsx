@@ -21,6 +21,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     { data: monthlyTotals },
     { data: firstEntry },
     { data: lastEntry },
+    { data: paused },
   ] = await Promise.all([
     supabase
       .from("categories")
@@ -51,6 +52,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       .order("month", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase.from("paused_months").select("month").eq("household_id", household_id),
   ]);
 
   const earliestMonth = firstEntry?.month ?? currentMonth;
@@ -81,8 +83,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   });
 
   const kindById = new Map((categories ?? []).map((category) => [category.id, category.kind]));
+  const pausedMonths = (paused ?? []).map((row) => row.month);
+  const pausedSet = new Set(pausedMonths);
   const recordedMonths = [...new Set((monthlyTotals ?? []).map((row) => row.month))].sort();
-  const prevMonth = recordedMonths.filter((value) => value < month).at(-1) ?? null;
+  const prevMonth = recordedMonths.filter((value) => value < month && !pausedSet.has(value)).at(-1) ?? null;
   const previousTotals = { income: 0, expense: 0, net: 0, entries: 0 };
   if (prevMonth) {
     for (const row of monthlyTotals ?? []) {
@@ -109,6 +113,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         groups={groups ?? []}
         previousTotals={previousTotals}
         prevMonth={prevMonth}
+        pausedMonths={pausedMonths}
         entries={(entries ?? []).map((entry) => ({ ...entry, amount: Number(entry.amount) }))}
       />
     </main>
