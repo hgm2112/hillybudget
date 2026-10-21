@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { addEntries, deleteEntry, fillRecurring, updateEntry, type ActionResult } from "./actions";
+import { addEntries, clearMonth, deleteEntry, fillRecurring, updateEntry, type ActionResult } from "./actions";
 
 type Category = {
   id: string;
@@ -34,6 +34,7 @@ type Category = {
   ideal_override: number | null;
   archived: boolean;
   group_id: string | null;
+  no_ideal: boolean;
 };
 
 type Group = { id: string; name: string; color: string; sort_order: number };
@@ -78,6 +79,48 @@ function SummaryChip({ info, suffix }: { info: DeltaInfo; suffix?: string }) {
   );
 }
 
+function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              onOpenChange(false);
+              onConfirm();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ExpensesClient({
   householdId,
   month,
@@ -110,6 +153,7 @@ export function ExpensesClient({
   const [newIncome, setNewIncome] = useState({ categoryId: "", amount: "" });
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
 
@@ -279,7 +323,8 @@ export function ExpensesClient({
     entry: Entry,
     label: string,
     categoryOptions: Category[] | null,
-    cardOptions: CardItem[] | null
+    cardOptions: CardItem[] | null,
+    editable = true
   ) {
     return (
       <div
@@ -288,30 +333,32 @@ export function ExpensesClient({
       >
         <span className="w-20 shrink-0 tabular-nums">{money(entry.amount)}</span>
         <span className="truncate">{label}</span>
-        <div className="ml-auto flex items-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Entry options"
-                  className="text-muted-foreground opacity-50 group-hover/row:opacity-100"
-                />
-              }
-            >
-              <MoreHorizontal className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-28">
-              <DropdownMenuItem onClick={() => setEditing({ entry, categoryOptions, cardOptions })}>
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => run(deleteEntry(entry.id))}>
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {editable && (
+          <div className="ml-auto flex items-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Entry options"
+                    className="text-muted-foreground opacity-50 group-hover/row:opacity-100"
+                  />
+                }
+              >
+                <MoreHorizontal className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-28">
+                <DropdownMenuItem onClick={() => setEditing({ entry, categoryOptions, cardOptions })}>
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={() => run(deleteEntry(entry.id))}>
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
     );
   }
@@ -331,6 +378,7 @@ export function ExpensesClient({
     const ideal = idealByCategory[category.id] ?? 0;
     const idealRounded = Math.round(ideal);
     const difference = total - idealRounded;
+    const showIdeal = !category.no_ideal && ideal > 0;
     const isOpen = query !== "" || expanded.has(category.id);
     const quickKey = category.id;
     const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
@@ -371,15 +419,19 @@ export function ExpensesClient({
           <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
-            {ideal > 0 && (
-              <>
-                <span className="text-xs text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
-                <span className={`text-xs ${difference > 0 ? "text-red-600" : "text-green-600"}`}>
+            {showIdeal ? (
+              <span className="flex w-36 shrink-0 items-center justify-end gap-2 text-xs opacity-50">
+                <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
+                <span className={difference > 0 ? "text-red-600" : "text-green-600"}>
                   ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
                 </span>
-              </>
+              </span>
+            ) : (
+              <span className="w-36 shrink-0" aria-hidden />
             )}
-            <span className="font-heading text-sm font-semibold tabular-nums">{money(total)}</span>
+            <span className="w-24 shrink-0 text-right font-heading text-sm font-semibold tabular-nums">
+              {money(total)}
+            </span>
             {isOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
             ) : (
@@ -464,34 +516,37 @@ export function ExpensesClient({
       </div>
 
       <div className="my-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search categories"
-            placeholder="Search categories…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-8 w-full pl-8 text-sm sm:w-48"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search categories"
+              placeholder="Search categories…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-8 w-full pl-8 text-sm sm:w-48"
+            />
+          </div>
+          {viewMode === "category" && (
+            <select
+              aria-label="Card filter"
+              value={cardFilter}
+              onChange={(event) => setCardFilter(event.target.value)}
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="all">All cards</option>
+              <option value="none">No card</option>
+              {activeCards.map((card) => (
+                <option key={card.id} value={card.id}>{card.name}</option>
+              ))}
+            </select>
+          )}
+          <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
+            {viewMode === "category" ? "By card" : "By category"}
+          </Button>
+          <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
         </div>
-        {viewMode === "category" && (
-          <select
-            aria-label="Card filter"
-            value={cardFilter}
-            onChange={(event) => setCardFilter(event.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-sm"
-          >
-            <option value="all">All cards</option>
-            <option value="none">No card</option>
-            {activeCards.map((card) => (
-              <option key={card.id} value={card.id}>{card.name}</option>
-            ))}
-          </select>
-        )}
-        <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
-        <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
-          {viewMode === "category" ? "By card" : "By category"}
-        </Button>
+        <Button variant="outline" className="ml-auto" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
       </div>
 
       <div className="rounded-xl border bg-card">
@@ -540,26 +595,6 @@ export function ExpensesClient({
                     (!query || (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query))
                 );
                 const subtotal = query ? cardEntries.reduce((sum, entry) => sum + entry.amount, 0) : cardTotals.get(card.id) ?? 0;
-                const quickKey = `card:${card.id}`;
-                const quickState = quick[quickKey] ?? { amount: "", cardId: card.id, categoryId: expenseCategories[0]?.id ?? "" };
-
-                function submitQuick(split: boolean) {
-                  const parts = parseAmountExpression(quickState.amount);
-                  const categoryId = quickState.categoryId ?? expenseCategories[0]?.id;
-                  if (!parts || !categoryId) return;
-                  const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
-                  run(
-                    addEntries({
-                      month,
-                      categoryId,
-                      cardId: card.id === "none" ? null : card.id,
-                      note: null,
-                      amounts,
-                    })
-                  ).then((ok) => {
-                    if (ok) setQuickDraft(quickKey, { amount: "" });
-                  });
-                }
 
                 return (
                   <div key={card.id} className="space-y-0.5">
@@ -570,35 +605,8 @@ export function ExpensesClient({
                     </div>
                     <div>
                       {cardEntries.map((entry) =>
-                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards)
+                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards, false)
                       )}
-                      <div className="flex items-center gap-2 px-3 pt-1.5">
-                        <Input
-                          placeholder="Amount (e.g. 12.50+8)"
-                          title="Enter adds the total; Shift+Enter splits each part into its own entry."
-                          value={quickState.amount}
-                          onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
-                          onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
-                            event.preventDefault();
-                            submitQuick(event.shiftKey);
-                          }}
-                          inputMode="decimal"
-                          className="h-8 flex-1 text-sm tabular-nums"
-                        />
-                        <select
-                          value={quickState.categoryId ?? expenseCategories[0]?.id ?? ""}
-                          onChange={(event) => setQuickDraft(quickKey, { categoryId: event.target.value })}
-                          className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
-                        >
-                          {expenseCategories.map((category) => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                          ))}
-                        </select>
-                        <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
-                          <Plus className="size-4" />
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 );
@@ -656,6 +664,15 @@ export function ExpensesClient({
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title={`Clear expense entries for ${monthLabel(month)}?`}
+        description="All expense entries for this month will be removed. Income entries and other months are not affected."
+        confirmLabel="Clear expenses"
+        onOpenChange={setConfirmClear}
+        onConfirm={() => run(clearMonth(month))}
+      />
 
       {editing && (
         <EntryDialog

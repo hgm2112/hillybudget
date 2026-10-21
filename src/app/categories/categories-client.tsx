@@ -293,7 +293,7 @@ export function CategoriesClient({
             <Card>
               <CardContent className="space-y-1 p-4">
                 <div className="-mx-4 flex items-center gap-2 px-5 py-1">
-                  <span className="min-w-0 truncate text-base font-bold">Regular categories</span>
+                  <span className="min-w-0 truncate text-base font-bold">Groups + Categories</span>
                   <span className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs">
                     <span className="w-20 text-right text-muted-foreground">Ideal</span>
                     <span className="w-20 text-right text-muted-foreground">Spending</span>
@@ -594,7 +594,7 @@ function CategoryRow({
           <Repeat className="size-4" />
         </button>
       </span>
-      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{category.no_ideal ? "" : money(category.ideal)}</span>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground opacity-50">{category.no_ideal ? "" : money(category.ideal)}</span>
       <span className="w-20 shrink-0 text-right text-xs tabular-nums">{money(spent)}</span>
       <span
         draggable
@@ -709,7 +709,7 @@ function CategoryDetail({
         <div className="grid grid-cols-3 gap-3 border-y py-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Ideal</p>
-            <p className="text-lg font-semibold tabular-nums">{category.no_ideal ? "—" : money(category.ideal)}</p>
+            <p className="text-lg font-semibold tabular-nums opacity-50">{category.no_ideal ? "—" : money(category.ideal)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Spending</p>
@@ -719,7 +719,7 @@ function CategoryDetail({
             <p className="text-xs text-muted-foreground">Difference</p>
             <p
               className={cn(
-                "text-lg font-semibold tabular-nums",
+                "text-lg font-semibold tabular-nums opacity-50",
                 category.no_ideal
                   ? "text-muted-foreground"
                   : difference > 0

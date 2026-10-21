@@ -77,6 +77,27 @@ export async function deleteEntry(id: string): Promise<ActionResult> {
   return {};
 }
 
+export async function clearMonth(month: string): Promise<ActionResult> {
+  if (!MONTH_RE.test(month)) return { error: "Invalid month." };
+  const { supabase, householdId } = await context();
+
+  const { data: expenseCategories, error: categoriesError } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("kind", "expense");
+  if (categoriesError) return { error: categoriesError.message };
+
+  const ids = (expenseCategories ?? []).map((category) => category.id);
+  if (ids.length === 0) return {};
+
+  const { error } = await supabase.from("ledger_entries").delete().eq("month", month).in("category_id", ids);
+  if (error) return { error: error.message };
+
+  revalidatePath("/expenses");
+  return {};
+}
+
 export async function fillRecurring(month: string): Promise<ActionResult> {
   if (!MONTH_RE.test(month)) return { error: "Invalid month." };
   const { supabase, householdId } = await context();
