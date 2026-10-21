@@ -310,6 +310,19 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **Payload contract fix (app-only, Option A):** the first restore attempt failed with `Unsupported backup format` — the confirm route sent the *normalized* validator output `{household, exported_at, tables}` while the deployed RPC expects the *backup envelope* (`app`/`schema_version` markers + all **12** sections). Nothing was written by the failed attempt (verified: 1 household, 44 categories, 593 entries). Fixed in `src/lib/restore.ts`: the validated payload now carries `app`, `schema_version` and all 12 sections (10 validated data tables with their original ids intact + `households`/`household_members` as passthrough the RPC imports neither of), and `RESTORE_RPC_SECTIONS` declares the contract in code, mirrored by the SQL section list in `0012`. New vitest case pins the contract. Known wart: the RPC requires 12 sections but consumes 10 — a future `0013` could narrow it.
 - Checks: `npm run lint`, `npm test` (17/17), `npm run build` pass. Not run: local-DB e2e, runtime restore smoke test.
 
+## Restore — first successful restore (2026-10-21)
+
+- The user ran the restore in Settings → Data & Backups and it **succeeded**: a new household `WHill (restored 2026-10-21)` was created (id `bbb2a83d-dc9b-458d-ae25-9f458ed5c755`, invite code `20C41CEC`; the original `WHill` keeps `90EE9B4F`), owned by the same user, with the calling user as its single member.
+- **Parity verified read-only against the live DB** — restored vs original: 1 member, 1 settings, 11 category groups, 44 categories, 9 cards, 15 accounts, 12 recurring items, 3 skipped months, 5 archive periods, 593 ledger entries, 179 balances (872 rows); entry total $364,570.99 (income $180,529.87 / expense $184,041.12) identical; 22 months (2025-01 → 2026-10); 34 income / 559 expense rows; category flags identical (32 no-ideal, 0 excluded, 14 with icon, 2 with ideal override); 12 active recurring items; balance sum $9,089,968.34; `ideal_window` trailing12. **0 id collisions** between the households (1,186 ledger rows / 1,186 distinct ids → the remap worked); `import_batch_id` left on 0 rows; `created_by` kept on the 592 entries authored by the user and nulled on the 1 entry with an unknown user. The original household was untouched.
+- The user chose to **keep both households and stay in the original `WHill`**; the restored copy stays as a complete duplicate and is reachable via Settings → Switch household. The restored household's invite code `20C41CEC` is the one to give the other member.
+
+## Merge to main (2026-10-21)
+
+- PRs #30, #31, #32 squash-merged to `main` in that order: `1f007a3` (#30 search), `5f4883b` (#31 no_ideal/ideal alignment/clear expenses/header), `cf995e6` (#32 backup + restore Phase A/B + household switcher). 27 files, +5,533/−902 since `0df8472`. `main` now carries migrations `0001`–`0012`.
+- Squashing rewrote the earlier commits, so #31 and #32 conflicted with the new `main`; resolved by merging `main` into each branch and keeping the branch side (a superset: it already contained the squashed work) — `SESSION.md` and `src/app/expenses/expenses-client.tsx` for #31, `SESSION.md` for #32. Lint + build (and 17/17 vitest on #32's branch) re-verified before each push; conflict markers checked per AGENTS.md. Merged branches deleted locally and on the remote.
+- Vercel deploys only from `main`, so the deployed site now has the backup card, the 31-day reminder, the restore flow (owner-gated) and the household switcher. The live database already carried `0011`+`0012`, so the deployed app could restore immediately.
+- PR #21 remains open (base `feat/categories-recurring-controls`); nothing else was touched.
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
@@ -317,14 +330,17 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 
 ## Known issues and unfinished work
 
-- **No runtime smoke-testing has been done.** All phases were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
-- **The restore path has never executed.** The local-DB e2e (`tests/restore-e2e.mjs`) has not been run (no Docker; user declined). `0011` was applied to the remote project, so the *deployed* function body has executed zero times; `0012` (remap + naming) has not been applied either. The first real restore will be the first execution of this SQL against live data.
-- The ID-remap blocker is resolved: `0012` is applied, so a restore of the user's backup no longer collides with the 871 source rows still present in the live household.
+- **No runtime smoke-testing has been done** for the pre-restore phases: those were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
+- **The restore path has now executed once, successfully**, against the live project (2026-10-21) — see "Restore — first successful restore". What is still unverified: the local-DB e2e suite (`tests/restore-e2e.mjs`, ~50 assertions) has never been run (no Docker; the user declined), so the failure/rollback paths have only been reasoned about, not exercised.
+- **No "leave/delete household" action exists.** The restored duplicate (`WHill (restored 2026-10-21)`) can only be removed by a manual cascade delete, which needs explicit approval; there is no UI for it.
+- Each additional confirmed restore creates **another** household (by design — restore never overwrites). The Settings switcher moves between them; the default (no cookie) is the oldest membership, i.e. `WHill`.
+- The RPC still requires all **12** backup sections although it consumes 10 (`households` and `household_members` travel as passthrough); a future `0013` could narrow the list, but the app currently sends all 12 to match the deployed contract.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
-- The user's backup file `hillybudget-backup-2026-10-21(2).json` sits in the repo root; it is git-ignored (`.gitignore:49`) and must stay untracked.
+- The user's backup file `hillybudget-backup-2026-10-21(2).json` (plus its Windows `Zone.Identifier` artifact) sits in the repo root; both are git-ignored (`.gitignore:49`) and must stay untracked. Consider moving the file out of the repo.
 
 ## Next action
 
-- Test the restore in Settings → Data & Backups with the real backup; expect a new household `WHill (restored 2026-10-21)` with 872 rows, the original household untouched, then switch into it and invite the other member with the new invite code.
-- Merge PRs #30/#31/#32 as desired (Vercel deploys only from `main`).
+- Invite the other member into `WHill (restored 2026-10-21)` with invite code `20C41CEC` (the original `WHill` code `90EE9B4F` is unchanged) — the user is currently staying in `WHill` and will switch when ready.
+- Decide whether to keep the restored duplicate long-term, and if not, scope a household-deletion feature (cascades to that household's rows only) for review before any SQL.
+- Optionally run the disposable-stack e2e (`npx supabase start && npx supabase db reset && npm run test:e2e`) at some point to cover the failure/rollback paths that the live run did not exercise.
