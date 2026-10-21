@@ -266,7 +266,8 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Header uses the `/accounts` 3-zone grid (title left, `MonthNav` centered, empty right) with `mb-4`; `All cards` / `Add recurring items` / `By card` sit under the widgets.
 - Expense categories are grouped by `categories.group_id` using the existing `category_groups`, with an `Ungrouped` fallback — same shape as `/categories`. `page.tsx` now queries `category_groups` and selects `group_id`.
 - Group headers use `.group-tint` (group color) with a `size-3.5` dot and `text-base font-bold` name; category row dots are `size-2.5` and colored with the **group** color.
-- **Live search bar** (first in the action row): filters by category name (case-insensitive) as you type; hides non-matching categories, auto-expands matches, filters entries in By-card view, and combines with the card filter. `npm run lint` + `npm run build` pass. No runtime smoke test.
+- **Live search bar** (first in the action row): filters by category name (case-insensitive) as you type; hides non-matching categories, auto-expands matches, filters entries in By-card view, and combines with the card filter.
+- `no_ideal` is now honored on `/expenses`: `page.tsx` selects it and forces the ideal to 0 (RPC override null), so categories marked "no ideal" on `/categories` hide the ideal block. The ideal block is a right-aligned unit (`gap-4`) before the total. `npm run lint` + `npm run build` pass. No runtime smoke test.
 
 ## Checks
 
