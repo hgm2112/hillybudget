@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseRestoreJson, validateBackupPayload } from "@/lib/restore";
 
@@ -178,5 +179,17 @@ describe("restore validator", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.warnings.join(" ")).toContain("will be corrected on restore");
+  });
+
+  it("accepts the shared e2e fixture and reports its counts and warnings", () => {
+    const fixture = JSON.parse(readFileSync("tests/fixtures/restore-fixture.json", "utf8"));
+    const result = validateBackupPayload(fixture);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.counts.categories).toBe(3);
+    expect(result.counts.ledger_entries).toBe(3);
+    expect(result.counts.account_balances).toBe(2);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("will be corrected on restore");
   });
 });

@@ -3,6 +3,12 @@
 -- and all imported rows roll back together. Never touches any existing
 -- household, membership, profile, or auth user. import_batch_id is not
 -- restored (import_batches rows are not part of a backup; FK is set null).
+-- Every imported data row receives a fresh UUID. Old -> new ID mappings are
+-- kept in jsonb variables for the five tables other rows can reference
+-- (category_groups, categories, cards, accounts, recurring_items) and are
+-- applied to every dependent foreign key, so a restore can never collide
+-- with rows already in the database — including rows restored twice from
+-- the same backup.
 
 create or replace function public.restore_into_new_household(p_payload jsonb)
 returns jsonb
@@ -20,6 +26,11 @@ declare
   v_is_owner         boolean;
   v_tables           jsonb;
   v_settings         jsonb;
+  v_map_groups       jsonb;
+  v_map_categories   jsonb;
+  v_map_cards        jsonb;
+  v_map_accounts     jsonb;
+  v_map_recurring    jsonb;
   v_expected         integer;
   v_count            integer;
   t                  text;
@@ -189,6 +200,26 @@ begin
     raise exception 'An archive period references an account missing from the backup';
   end if;
 
+  select coalesce(jsonb_object_agg((g->>'id'), gen_random_uuid()), '{}'::jsonb)
+  into v_map_groups
+  from jsonb_array_elements(v_tables->'category_groups') g;
+
+  select coalesce(jsonb_object_agg((c->>'id'), gen_random_uuid()), '{}'::jsonb)
+  into v_map_categories
+  from jsonb_array_elements(v_tables->'categories') c;
+
+  select coalesce(jsonb_object_agg((c->>'id'), gen_random_uuid()), '{}'::jsonb)
+  into v_map_cards
+  from jsonb_array_elements(v_tables->'cards') c;
+
+  select coalesce(jsonb_object_agg((a->>'id'), gen_random_uuid()), '{}'::jsonb)
+  into v_map_accounts
+  from jsonb_array_elements(v_tables->'accounts') a;
+
+  select coalesce(jsonb_object_agg((r->>'id'), gen_random_uuid()), '{}'::jsonb)
+  into v_map_recurring
+  from jsonb_array_elements(v_tables->'recurring_items') r;
+
   loop
     v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
     exit when not exists (select 1 from public.households h where h.invite_code = v_code);
@@ -204,7 +235,7 @@ begin
   values (v_hh, coalesce(btrim(v_settings->>'ideal_window'), 'trailing12'));
 
   insert into public.category_groups (id, household_id, name, color, sort_order, created_at, updated_at)
-  select (g->>'id')::uuid, v_hh, g->>'name',
+  select (v_map_groups ->> (g->>'id'))::uuid, v_hh, g->>'name',
          coalesce(g->>'color', '#6b7280'),
          coalesce((g->>'sort_order')::integer, 0),
          coalesce((g->>'created_at')::timestamptz, now()),
@@ -220,7 +251,7 @@ begin
     id, household_id, name, kind, color, sort_order, archived,
     ideal_override, excluded, icon, no_ideal, group_id, created_at, updated_at
   )
-  select (c->>'id')::uuid, v_hh, c->>'name',
+  select (v_map_categories ->> (c->>'id'))::uuid, v_hh, c->>'name',
          (c->>'kind')::public.category_kind,
          coalesce(c->>'color', '#6b7280'),
          coalesce((c->>'sort_order')::integer, 0),
@@ -229,7 +260,7 @@ begin
          coalesce((c->>'excluded')::boolean, false),
          c->>'icon',
          coalesce((c->>'no_ideal')::boolean, false),
-         (c->>'group_id')::uuid,
+         (v_map_groups ->> (c->>'group_id'))::uuid,
          coalesce((c->>'created_at')::timestamptz, now()),
          coalesce((c->>'updated_at')::timestamptz, now())
   from jsonb_array_elements(v_tables->'categories') c;
@@ -240,7 +271,7 @@ begin
   end if;
 
   insert into public.cards (id, household_id, name, color, sort_order, archived, created_at, updated_at)
-  select (c->>'id')::uuid, v_hh, c->>'name',
+  select (v_map_cards ->> (c->>'id'))::uuid, v_hh, c->>'name',
          coalesce(c->>'color', '#6b7280'),
          coalesce((c->>'sort_order')::integer, 0),
          coalesce((c->>'archived')::boolean, false),
@@ -257,7 +288,7 @@ begin
     id, household_id, name, kind, color, sort_order, archived,
     original_amount, interest_rate, monthly_payment, start_date, created_at, updated_at
   )
-  select (a->>'id')::uuid, v_hh, a->>'name',
+  select (v_map_accounts ->> (a->>'id'))::uuid, v_hh, a->>'name',
          (a->>'kind')::public.account_kind,
          coalesce(a->>'color', '#6b7280'),
          coalesce((a->>'sort_order')::integer, 0),
@@ -279,9 +310,9 @@ begin
     id, household_id, category_id, card_id, amount, note,
     start_month, end_month, active, created_at, updated_at
   )
-  select (r->>'id')::uuid, v_hh,
-         (r->>'category_id')::uuid,
-         (r->>'card_id')::uuid,
+  select (v_map_recurring ->> (r->>'id'))::uuid, v_hh,
+         (v_map_categories ->> (r->>'category_id'))::uuid,
+         (v_map_cards ->> (r->>'card_id'))::uuid,
          (r->>'amount')::numeric(12, 2),
          r->>'note',
          (r->>'start_month')::date,
@@ -297,7 +328,7 @@ begin
   end if;
 
   insert into public.skipped_months (id, household_id, month, created_at)
-  select (s->>'id')::uuid, v_hh,
+  select gen_random_uuid(), v_hh,
          (s->>'month')::date,
          coalesce((s->>'created_at')::timestamptz, now())
   from jsonb_array_elements(v_tables->'skipped_months') s;
@@ -308,8 +339,8 @@ begin
   end if;
 
   insert into public.account_archive_periods (id, household_id, account_id, start_month, end_month, created_at)
-  select (p->>'id')::uuid, v_hh,
-         (p->>'account_id')::uuid,
+  select gen_random_uuid(), v_hh,
+         (v_map_accounts ->> (p->>'account_id'))::uuid,
          (p->>'start_month')::date,
          (p->>'end_month')::date,
          coalesce((p->>'created_at')::timestamptz, now())
@@ -324,14 +355,14 @@ begin
     id, household_id, month, category_id, card_id, kind, amount, note,
     recurring_item_id, created_by, created_at, updated_at
   )
-  select (e->>'id')::uuid, v_hh,
+  select gen_random_uuid(), v_hh,
          (e->>'month')::date,
-         (e->>'category_id')::uuid,
-         (e->>'card_id')::uuid,
+         (v_map_categories ->> (e->>'category_id'))::uuid,
+         (v_map_cards ->> (e->>'card_id'))::uuid,
          (coalesce(e->>'kind', 'expense'))::public.category_kind,
          (e->>'amount')::numeric(12, 2),
          e->>'note',
-         (e->>'recurring_item_id')::uuid,
+         (v_map_recurring ->> (e->>'recurring_item_id'))::uuid,
          u.id,
          coalesce((e->>'created_at')::timestamptz, now()),
          coalesce((e->>'updated_at')::timestamptz, now())
@@ -346,8 +377,8 @@ begin
   insert into public.account_balances (
     id, household_id, account_id, month, balance, contributions, created_at, updated_at
   )
-  select (b->>'id')::uuid, v_hh,
-         (b->>'account_id')::uuid,
+  select gen_random_uuid(), v_hh,
+         (v_map_accounts ->> (b->>'account_id'))::uuid,
          (b->>'month')::date,
          (b->>'balance')::numeric(12, 2),
          (b->>'contributions')::numeric(12, 2),

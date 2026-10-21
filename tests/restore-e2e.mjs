@@ -8,7 +8,11 @@
 //   node tests/restore-e2e.mjs
 //
 // Signs up throwaway users and exercises the RPC through the real HTTP
-// layer (JWTs, PostgREST grants, RLS). Exits non-zero on the first failure.
+// layer (JWTs, PostgREST grants, RLS). The RPC assigns a fresh UUID to
+// every restored row and remaps dependent foreign keys, so verification
+// compares row *content* (values, dates, notes, flags) and resolved
+// relationships (by referenced row name/amount) instead of raw IDs.
+// Exits non-zero on the first failure.
 
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
@@ -59,6 +63,17 @@ const TIMESTAMPS = {
   account_balances: ["created_at", "updated_at"],
 };
 
+// table -> [[fkField, referencedTable]] — relationships verified by content.
+const FK_BY_TABLE = {
+  categories: [["group_id", "category_groups"]],
+  recurring_items: [["category_id", "categories"], ["card_id", "cards"]],
+  ledger_entries: [["category_id", "categories"], ["card_id", "cards"], ["recurring_item_id", "recurring_items"]],
+  account_balances: [["account_id", "accounts"]],
+  account_archive_periods: [["account_id", "accounts"]],
+};
+
+const REFERENCED_TABLES = ["category_groups", "categories", "cards", "accounts", "recurring_items"];
+
 const uniqueSuffix = Date.now().toString(36);
 const OWNER_EMAIL = `owner-${uniqueSuffix}@e2e.example`;
 const MEMBER_EMAIL = `member-${uniqueSuffix}@e2e.example`;
@@ -79,33 +94,54 @@ function failCase(message, error) {
   process.exit(1);
 }
 
-function normalizeTimestamps(table, row) {
-  const out = { ...row };
-  for (const field of TIMESTAMPS[table] ?? []) {
-    if (out[field] != null) out[field] = new Date(out[field]).getTime();
+// Normalized row content: ids/household/import_batch_id excluded (fresh ids
+// are asserted separately), FK fields excluded (verified via relationLabels),
+// numeric columns normalized, timestamps reduced to epoch ms, ledger kind
+// replaced by the category's kind (the DB trigger corrects mismatches),
+// created_by normalized to null unless the auth user exists on both sides.
+function contentKey(table, row, kindOf, existingUserIds) {
+  const fkFields = new Set((FK_BY_TABLE[table] ?? []).map(([field]) => field));
+  const out = {};
+  for (const [field, value] of Object.entries(row)) {
+    if (field === "id" || field === "household_id" || field === "import_batch_id") continue;
+    if (fkFields.has(field)) continue;
+    if (field === "created_by") {
+      out[field] = value && existingUserIds.has(value) ? value : null;
+      continue;
+    }
+    if ((NUMERIC_FIELDS[table] ?? []).includes(field)) {
+      out[field] = value == null ? null : Number(value);
+      continue;
+    }
+    if ((TIMESTAMPS[table] ?? []).includes(field)) {
+      out[field] = value == null ? null : new Date(value).getTime();
+      continue;
+    }
+    out[field] = value;
   }
-  return out;
+  if (table === "ledger_entries") out.kind = kindOf;
+  return JSON.stringify(out);
 }
 
-function expectedRow(table, fixtureRow, newHouseholdId, categoryKindById, existingUserIds) {
-  const row = { ...fixtureRow };
-  delete row.import_batch_id;
-  row.household_id = newHouseholdId;
-  if (row.created_by && !existingUserIds.has(row.created_by)) row.created_by = null;
-  if (table === "ledger_entries" && row.kind) row.kind = categoryKindById.get(row.category_id);
-  for (const field of NUMERIC_FIELDS[table] ?? []) {
-    if (row[field] != null) row[field] = Number(row[field]);
-  }
-  return normalizeTimestamps(table, row);
+function nameOf(row) {
+  return row?.name ?? null;
 }
 
-function actualRow(table, row) {
-  const out = { ...row };
-  delete out.import_batch_id;
-  for (const field of NUMERIC_FIELDS[table] ?? []) {
-    if (out[field] != null) out[field] = Number(out[field]);
-  }
-  return normalizeTimestamps(table, out);
+// Each FK maps to the referenced row's content identity (name, or
+// name+amount+start_month for recurring items, which have no name).
+function relationLabels(table, row, byId, kindOf) {
+  const refs = FK_BY_TABLE[table] ?? [];
+  if (refs.length === 0) return null;
+  const labels = refs.map(([field, refTable]) => {
+    const refRow = byId[refTable].get(row[field]);
+    if (!refRow) return null;
+    if (refTable === "recurring_items") {
+      return [Number(refRow.amount), nameOf(byId.categories.get(refRow.category_id)), refRow.start_month];
+    }
+    return nameOf(refRow);
+  });
+  if (table === "ledger_entries") labels.push(kindOf);
+  return JSON.stringify(labels);
 }
 
 async function expectRestoreError(ownerClient, payload, message, expectedPattern) {
@@ -134,28 +170,60 @@ async function fetchAll(client, table, householdId) {
   return data ?? [];
 }
 
-function verifyRestoredData(ownerClient, fixture, newHouseholdId, existingUserIds) {
-  const categoryKindById = new Map(fixture.tables.categories.map((row) => [row.id, row.kind]));
-  return Promise.all(
-    DATA_TABLES.map(async (table) => {
-      const rows = await fetchAll(ownerClient, table, newHouseholdId);
-      const expectedById = new Map(
-        fixture.tables[table].map((fixtureRow) => [
-          fixtureRow.id,
-          expectedRow(table, fixtureRow, newHouseholdId, categoryKindById, existingUserIds),
-        ])
+async function verifyRestoredData(client, fixture, newHouseholdId, existingUserIds) {
+  const db = {};
+  for (const table of DATA_TABLES) db[table] = await fetchAll(client, table, newHouseholdId);
+
+  const fixKindById = new Map(fixture.tables.categories.map((row) => [row.id, row.kind]));
+  const dbKindById = new Map(db.categories.map((row) => [row.id, row.kind]));
+  const fixById = {};
+  const dbById = {};
+  for (const refTable of REFERENCED_TABLES) {
+    fixById[refTable] = new Map(fixture.tables[refTable].map((row) => [row.id, row]));
+    dbById[refTable] = new Map(db[refTable].map((row) => [row.id, row]));
+  }
+
+  for (const table of DATA_TABLES) {
+    assert(
+      db[table].length === fixture.tables[table].length,
+      `${table}: row count preserved (${db[table].length})`
+    );
+
+    const fixtureIds = new Set(fixture.tables[table].map((row) => row.id));
+    assert(
+      db[table].every((row) => !fixtureIds.has(row.id)),
+      `${table}: row ids remapped to fresh UUIDs`
+    );
+
+    const fixKeys = fixture.tables[table]
+      .map((row) => contentKey(table, row, fixKindById.get(row.category_id) ?? null, existingUserIds))
+      .sort();
+    const dbKeys = db[table]
+      .map((row) => contentKey(table, row, dbKindById.get(row.category_id) ?? null, existingUserIds))
+      .sort();
+    for (let i = 0; i < fixKeys.length; i += 1) {
+      assert(
+        fixKeys[i] === dbKeys[i],
+        `${table}: row ${i + 1}/${dbKeys.length} content matches the backup exactly`
       );
-      assert(rows.length === fixture.tables[table].length, `${table}: row count preserved (${rows.length})`);
-      for (const dbRow of rows) {
-        const expected = expectedById.get(dbRow.id);
-        assert(expected !== undefined, `${table}: row id ${dbRow.id} was imported with its original id`);
+    }
+
+    const refs = FK_BY_TABLE[table] ?? [];
+    if (refs.length > 0) {
+      const fixLabels = fixture.tables[table]
+        .map((row) => relationLabels(table, row, fixById, fixKindById.get(row.category_id) ?? null))
+        .sort();
+      const dbLabels = db[table]
+        .map((row) => relationLabels(table, row, dbById, dbKindById.get(row.category_id) ?? null))
+        .sort();
+      for (let i = 0; i < fixLabels.length; i += 1) {
         assert(
-          JSON.stringify(expected) === JSON.stringify(actualRow(table, dbRow)),
-          `${table}: row ${dbRow.id} matches the backup field-for-field`
+          fixLabels[i] === dbLabels[i],
+          `${table}: relationship ${i + 1}/${dbLabels.length} points at the corresponding restored row`
         );
       }
-    })
-  );
+    }
+  }
 }
 
 const fixtureBase = JSON.parse(readFileSync("tests/fixtures/restore-fixture.json", "utf8"));
@@ -233,7 +301,8 @@ const { count: baselineLedger } = await owner
   const { data: corrected } = await owner
     .from("ledger_entries")
     .select("kind, created_by, import_batch_id")
-    .eq("id", "llllllll-0000-0000-0000-000000000002")
+    .eq("household_id", newHouseholdId)
+    .eq("note", "eBay sale (kind corrected on restore)")
     .single();
   assert(corrected.kind === "income", "entry kind corrected to match its income category");
   assert(corrected.created_by === null, "created_by for an unknown auth user is nulled");
@@ -242,7 +311,8 @@ const { count: baselineLedger } = await owner
   const { data: preserved } = await owner
     .from("ledger_entries")
     .select("created_by")
-    .eq("id", "llllllll-0000-0000-0000-000000000001")
+    .eq("household_id", newHouseholdId)
+    .eq("note", "Kroger run")
     .single();
   assert(preserved.created_by === ownerUser.id, "created_by preserved for a real auth user");
 
@@ -374,18 +444,19 @@ assert(
   "failed restores left no household records behind"
 );
 
-// CASE 14: duplicate submissions create distinct households (documented behavior).
+// CASE 14: repeated restores from the same backup both succeed (fresh ids).
 {
   const first = await owner.rpc("restore_into_new_household", {
     p_payload: JSON.parse(JSON.stringify(fixture)),
   });
-  if (first.error) failCase("retry restore (first)", first.error);
+  if (first.error) failCase("repeated restore (first)", first.error);
   const second = await owner.rpc("restore_into_new_household", {
     p_payload: JSON.parse(JSON.stringify(fixture)),
   });
-  if (second.error) failCase("retry restore (second)", second.error);
-  assert(first.data.household_id !== second.data.household_id, "repeated confirmed submissions create distinct households");
-  assert(householdCount(owner) === householdsBeforeFailures + 2, "retry households counted");
+  if (second.error) failCase("repeated restore (second)", second.error);
+  assert(first.data.household_id !== second.data.household_id, "repeated restores create distinct households");
+  assert(householdCount(owner) === householdsBeforeFailures + 2, "repeated restores counted");
+  await verifyRestoredData(owner, fixture, second.data.household_id, existingUserIds);
 }
 
 console.log(`\nrestore e2e complete — ${cases} assertions passed`);
