@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { getHousehold, requireUser } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackupClient } from "./backup-client";
 import { ImportClient } from "./import-client";
 import { RestoreClient } from "./restore-client";
+import { SwitchHousehold } from "./switch-household";
 
 export default async function SettingsPage() {
-  await requireUser();
+  const user = await requireUser();
   const membership = await getHousehold();
 
   if (!membership) {
@@ -26,6 +28,22 @@ export default async function SettingsPage() {
     );
   }
 
+  const supabase = await createClient();
+  const { data: memberships } = await supabase
+    .from("household_members")
+    .select("household_id, role")
+    .eq("user_id", user.id);
+  const householdIds = (memberships ?? []).map((row) => row.household_id);
+  const { data: householdRows } = householdIds.length
+    ? await supabase.from("households").select("id, name").in("id", householdIds)
+    : { data: [] as { id: string; name: string }[] | null };
+  const nameById = new Map(
+    (householdRows ?? []).map((row) => [row.id, row.name as string])
+  );
+  const households = householdIds
+    .map((id) => ({ id, name: nameById.get(id) ?? "Household" }))
+    .filter((row) => nameById.has(row.id));
+
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-4 md:p-8">
       <div>
@@ -34,6 +52,9 @@ export default async function SettingsPage() {
           Import an Excel workbook and download household backups.
         </p>
       </div>
+      {households.length > 1 && (
+        <SwitchHousehold households={households} currentId={membership.household_id} />
+      )}
       <BackupClient householdId={membership.household_id} />
       {membership.role === "owner" && <RestoreClient />}
       {membership.role === "owner" ? (
