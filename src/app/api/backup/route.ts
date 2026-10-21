@@ -41,6 +41,8 @@ export async function GET() {
     return Response.json({ error: "Household record not found." }, { status: 404 });
   }
 
+  for (const row of tables.households ?? []) delete row.invite_code;
+
   const payload: BackupPayload = {
     app: BACKUP_APP,
     schema_version: BACKUP_SCHEMA_VERSION,

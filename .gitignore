@@ -45,5 +45,8 @@ __pycache__/
 # local budget workbook (contains personal financial data)
 Expenses*.xlsx
 
+# household backups (contain personal financial data)
+hillybudget-backup-*.json*
+
 # supabase cli local state (may contain connection details)
 supabase/.temp/

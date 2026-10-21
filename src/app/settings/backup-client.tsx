@@ -67,7 +67,7 @@ export function BackupClient({ householdId }: { householdId: string }) {
             <Download className="size-4" /> Back Up Now
           </Button>
           <span className="text-sm text-muted-foreground">
-            Last backup: {lastBackup ? new Date(lastBackup).toLocaleString() : "never"}
+            Last downloaded: {lastBackup ? new Date(lastBackup).toLocaleString() : "never"}
           </span>
         </div>
         {status && <p className="text-sm text-green-600">{status}</p>}
