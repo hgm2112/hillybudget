@@ -28,6 +28,9 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+  // The payload contract is defined by RESTORE_RPC_SECTIONS in src/lib/restore.ts
+  // and mirrored in supabase/migrations/0012_restore_backup_remap.sql: the format
+  // markers plus every backup section, all server-validated.
   const { data, error } = await supabase.rpc("restore_into_new_household", {
     p_payload: validation.payload,
   });

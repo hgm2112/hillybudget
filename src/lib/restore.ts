@@ -35,10 +35,20 @@ export const RESTORE_DATA_TABLES = BACKUP_TABLES.filter(
 
 export type RestoreDataTable = Exclude<BackupTable, "households" | "household_members">;
 
+// The sections the restore RPC requires. Mirrors the section list in
+// supabase/migrations/0012_restore_backup_remap.sql and the BACKUP_TABLES
+// order in src/lib/backup.ts — the RPC rejects a payload that is missing any
+// of them, so the validated payload carries all of them.
+export const RESTORE_RPC_SECTIONS = BACKUP_TABLES;
+
+export type RestoreTableRow = Record<string, unknown>;
+
 export type ValidatedRestorePayload = {
+  app: string;
+  schema_version: number;
   household: { id: string; name: string; owner_id: string };
   exported_at: string;
-  tables: Record<RestoreDataTable, RestoreRow[]>;
+  tables: Record<BackupTable, RestoreTableRow[]>;
 };
 
 export type RestoreRow = Record<string, unknown> & { id: string };
@@ -338,14 +348,26 @@ export function validateBackupPayload(data: unknown): RestoreValidation {
 
   if (errors.length > 0) return { ok: false, errors: finishErrors(errors) };
 
+  const payloadTables: Record<BackupTable, RestoreTableRow[]> = Object.create(null);
+  for (const table of RESTORE_DATA_TABLES) {
+    payloadTables[table] = validatedRows[table];
+  }
+  // households and household_members travel unchanged: the restore RPC requires
+  // the sections but imports neither — it creates its own household and only
+  // the calling user's membership.
+  payloadTables.households = allRows.households ?? [];
+  payloadTables.household_members = allRows.household_members ?? [];
+
   const payload: ValidatedRestorePayload = {
+    app: BACKUP_APP,
+    schema_version: BACKUP_SCHEMA_VERSION,
     household: {
       id: householdId as string,
       name: (householdName as string).trim(),
       owner_id: householdOwner as string,
     },
     exported_at: root.exported_at as string,
-    tables: validatedRows as Record<RestoreDataTable, RestoreRow[]>,
+    tables: payloadTables,
   };
 
   return {

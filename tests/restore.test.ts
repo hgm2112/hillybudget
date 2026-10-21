@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseRestoreJson, restoredHouseholdName, validateBackupPayload } from "@/lib/restore";
+import {
+  parseRestoreJson,
+  RESTORE_RPC_SECTIONS,
+  restoredHouseholdName,
+  validateBackupPayload,
+} from "@/lib/restore";
 
 let counter = 0;
 function uuid(): string {
@@ -218,5 +223,24 @@ describe("restore validator", () => {
       "WHill (restored 2026-10-21)"
     );
     expect(restoredHouseholdName("WHill", "2026-01-02T00:00:00.000Z")).toBe("WHill (restored 2026-01-02)");
+  });
+
+  it("builds the RPC payload with the format markers and every required section", () => {
+    const backup = makeBackup();
+    const tables = backup.tables as Record<string, Record<string, unknown>[]>;
+    for (const row of tables.household_members) delete row.id;
+    for (const row of tables.household_settings) delete row.id;
+    const result = validateBackupPayload(backup);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = result.payload;
+    expect(payload.app).toBe("hillybudget");
+    expect(payload.schema_version).toBe(1);
+    expect(payload.household.id).toBe(HOUSEHOLD_ID);
+    expect(typeof payload.exported_at).toBe("string");
+    expect(Object.keys(payload.tables).sort()).toEqual([...RESTORE_RPC_SECTIONS].sort());
+    expect(payload.tables.household_members[0]).not.toHaveProperty("id");
+    expect(payload.tables.household_settings[0]).not.toHaveProperty("id");
+    expect(payload.tables.categories[0].id).toBe(tables.categories[0].id);
   });
 });
