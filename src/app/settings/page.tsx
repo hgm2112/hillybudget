@@ -4,6 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackupClient } from "./backup-client";
 import { ImportClient } from "./import-client";
+import { RestoreClient } from "./restore-client";
 
 export default async function SettingsPage() {
   await requireUser();
@@ -34,6 +35,7 @@ export default async function SettingsPage() {
         </p>
       </div>
       <BackupClient householdId={membership.household_id} />
+      {membership.role === "owner" && <RestoreClient />}
       {membership.role === "owner" ? (
         <div className="space-y-3">
           <div className="space-y-1">
