@@ -420,7 +420,7 @@ export function ExpensesClient({
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
             {showIdeal ? (
-              <span className="flex w-36 shrink-0 items-center justify-end gap-2 text-xs">
+              <span className="flex w-36 shrink-0 items-center justify-end gap-2 text-xs opacity-50">
                 <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
                 <span className={difference > 0 ? "text-red-600" : "text-green-600"}>
                   ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
