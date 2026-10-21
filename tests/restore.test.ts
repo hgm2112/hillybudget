@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseRestoreJson, validateBackupPayload } from "@/lib/restore";
+import { parseRestoreJson, restoredHouseholdName, validateBackupPayload } from "@/lib/restore";
 
 let counter = 0;
 function uuid(): string {
@@ -191,5 +191,32 @@ describe("restore validator", () => {
     expect(result.counts.account_balances).toBe(2);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("will be corrected on restore");
+  });
+
+  it("accepts backup rows without ids for household_members and household_settings", () => {
+    const backup = makeBackup();
+    const tables = backup.tables as Record<string, Record<string, unknown>[]>;
+    for (const row of tables.household_members) delete row.id;
+    for (const row of tables.household_settings) delete row.id;
+    const result = validateBackupPayload(backup);
+    expect(result.ok).toBe(true);
+  });
+
+  it("still rejects a data row without an id", () => {
+    const backup = makeBackup();
+    const tables = backup.tables as Record<string, Record<string, unknown>[]>;
+    delete tables.categories[0].id;
+    const result = validateBackupPayload(backup);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join(" ")).toMatch(/categories: a row has a missing or invalid id/i);
+  });
+
+  it("names the restored household with a restore suffix", () => {
+    expect(restoredHouseholdName("WHill", "2026-10-21T08:23:05.990Z")).toBe("WHill (restored 2026-10-21)");
+    expect(restoredHouseholdName("WHill (restored 2026-10-21)", "2026-10-21T08:23:05.990Z")).toBe(
+      "WHill (restored 2026-10-21)"
+    );
+    expect(restoredHouseholdName("WHill", "2026-01-02T00:00:00.000Z")).toBe("WHill (restored 2026-01-02)");
   });
 });

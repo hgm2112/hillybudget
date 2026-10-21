@@ -1,5 +1,5 @@
 import { getHousehold, requireUser } from "@/lib/session";
-import { parseRestoreJson, RESTORE_MAX_BYTES } from "@/lib/restore";
+import { parseRestoreJson, RESTORE_MAX_BYTES, restoredHouseholdName } from "@/lib/restore";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -38,6 +38,10 @@ export async function POST(request: Request) {
     mode: "new-household",
     preview: {
       householdName: validation.payload.household.name,
+      newHouseholdName: restoredHouseholdName(
+        validation.payload.household.name,
+        validation.payload.exported_at
+      ),
       exportedAt: validation.payload.exported_at,
       counts: validation.counts,
       warnings: validation.warnings,

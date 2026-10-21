@@ -10,6 +10,7 @@ import { switchHousehold } from "./actions";
 
 type RestorePreview = {
   householdName: string;
+  newHouseholdName: string;
   exportedAt: string;
   counts: Record<RestoreDataTable, number>;
   warnings: string[];
@@ -243,8 +244,9 @@ export function RestoreClient() {
               </ul>
             )}
             <p className="text-sm text-foreground">
-              Confirming creates a <span className="font-medium">new household</span> with this data.
-              Your current household stays exactly as-is.
+              Confirming creates a <span className="font-medium">new household</span> named{" "}
+              <span className="font-medium">“{preview.newHouseholdName}”</span> with this data. Your
+              current household stays exactly as-is.
             </p>
             <Button type="button" disabled={restoring} onClick={confirmRestore}>
               {restoring ? "Restoring…" : "Restore as New Household"}

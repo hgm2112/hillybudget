@@ -14,6 +14,21 @@ const KINDS = new Set(["expense", "income"]);
 const ACCOUNT_KINDS = new Set(["liquid", "retirement", "loan"]);
 const IDEAL_WINDOWS = new Set(["all", "trailing12", "trailing6"]);
 
+// household_members is keyed by (household_id, user_id) and household_settings
+// by household_id — neither table has an id column, so exported rows have none.
+const TABLES_WITHOUT_ID = new Set<BackupTable>(["household_members", "household_settings"]);
+
+const RESTORE_SUFFIX_RE = /\s*\(restored \d{4}-\d{2}-\d{2}\)\s*$/;
+
+export function restoredHouseholdName(name: string, exportedAt: string): string {
+  const base = name.replace(RESTORE_SUFFIX_RE, "").trim();
+  const date = new Date(exportedAt);
+  const stamp = Number.isNaN(date.getTime())
+    ? new Date().toISOString().slice(0, 10)
+    : date.toISOString().slice(0, 10);
+  return `${base} (restored ${stamp})`;
+}
+
 export const RESTORE_DATA_TABLES = BACKUP_TABLES.filter(
   (table) => table !== "households" && table !== "household_members"
 ) as RestoreDataTable[];
@@ -204,11 +219,13 @@ export function validateBackupPayload(data: unknown): RestoreValidation {
   for (const table of BACKUP_TABLES) {
     const rows = (tables[table] ?? []) as Record<string, unknown>[];
     const seen = new Set<string>();
+    const requiresId = !TABLES_WITHOUT_ID.has(table);
     for (const row of rows) {
       if (typeof row !== "object" || row === null) {
         errors.push(`${table}: a row isn't an object.`);
         break;
       }
+      if (!requiresId) continue;
       if (typeof row.id !== "string" || !UUID_RE.test(row.id)) {
         errors.push(`${table}: a row has a missing or invalid id.`);
         break;

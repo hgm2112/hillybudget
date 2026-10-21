@@ -276,7 +276,10 @@ const { count: baselineLedger } = await owner
   const newHouseholdId = data.household_id;
 
   assert(newHouseholdId !== currentHouseholdId, "restore creates a new household id");
-  assert(data.household_name === "Hilly Test Home", "restored household name");
+  assert(
+    data.household_name === "Hilly Test Home (restored 2026-10-21)",
+    `restored household name is suffixed (${data.household_name})`
+  );
   assert(
     typeof data.invite_code === "string" && /^[A-Z0-9]{8}$/.test(data.invite_code),
     `fresh invite code format (${data.invite_code})`
