@@ -163,6 +163,15 @@ export function ExpensesClient({
   const isPaused = pausedSet.has(month);
 
   useEffect(() => {
+    if (!isPaused) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isPaused]);
+
+  useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel(`ledger:${householdId}:${month}`)
@@ -481,231 +490,231 @@ export function ExpensesClient({
 
   return (
     <>
-      <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-semibold">Expenses</h1>
-          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
-        </div>
-        <div className="flex justify-center">
-          <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
-        </div>
-        <div />
-      </div>
-
-      <BackupReminder householdId={householdId} />
-
-      {error && <p className="my-3 text-sm text-red-600">{error}</p>}
-
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {summaries.map((summary) => (
-          <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
-            <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
-              {summary.label}
-            </div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">
-              {summary.currency ? moneyWhole(summary.value) : summary.value}
-            </div>
-            <div className="mt-1.5">
-              {!prevMonth ? (
-                <span className="text-xs text-muted-foreground">no prior data</span>
-              ) : summary.currency ? (
-                <SummaryChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
-                  {summary.value - summary.previous >= 0 ? "+" : ""}
-                  {summary.value - summary.previous}
-                </span>
-              )}
-            </div>
+      <div inert={isPaused || undefined}>
+        <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-2xl font-semibold">Expenses</h1>
+            {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
           </div>
-        ))}
-      </div>
-
-      <div className="my-3 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search categories"
-              placeholder="Search categories…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-8 w-full pl-8 text-sm sm:w-48"
-            />
+          <div className="flex justify-center">
+            <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
           </div>
-          {viewMode === "category" && (
-            <select
-              aria-label="Card filter"
-              value={cardFilter}
-              onChange={(event) => setCardFilter(event.target.value)}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
-            >
-              <option value="all">All cards</option>
-              <option value="none">No card</option>
-              {activeCards.map((card) => (
-                <option key={card.id} value={card.id}>{card.name}</option>
-              ))}
-            </select>
-          )}
-          <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
-            {viewMode === "category" ? "By card" : "By category"}
-          </Button>
-          <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
+          <div />
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          {isPaused ? (
-            <div className="flex flex-col items-end gap-1.5">
-              <p className="text-2xl font-bold text-muted-foreground">PAUSED</p>
-              <Button variant="outline" onClick={() => run(resumeMonth(month))}>Resume</Button>
-            </div>
-          ) : (
-            <Button variant="outline" onClick={() => run(pauseMonth(month))}>Pause month</Button>
-          )}
-          <Button variant="outline" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
-        </div>
-      </div>
 
-      <div className="rounded-xl border bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
-          <div>
-            <h2 className="text-sm font-semibold">Expenses for {monthLabel(month)}</h2>
-            <p className="text-xs text-muted-foreground">Type an amount, then Shift+Enter to continue to another amount.</p>
-            {isPaused && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                This month is paused. Its entries are still saved and editable, but it does not
-                count toward the dashboard or the stats.
-              </p>
+        <BackupReminder householdId={householdId} />
+
+        {error && <p className="my-3 text-sm text-red-600">{error}</p>}
+
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          {summaries.map((summary) => (
+            <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
+                {summary.label}
+              </div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums">
+                {summary.currency ? moneyWhole(summary.value) : summary.value}
+              </div>
+              <div className="mt-1.5">
+                {!prevMonth ? (
+                  <span className="text-xs text-muted-foreground">no prior data</span>
+                ) : summary.currency ? (
+                  <SummaryChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
+                    {summary.value - summary.previous >= 0 ? "+" : ""}
+                    {summary.value - summary.previous}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="my-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                aria-label="Search categories"
+                placeholder="Search categories…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-8 w-full pl-8 text-sm sm:w-48"
+              />
+            </div>
+            {viewMode === "category" && (
+              <select
+                aria-label="Card filter"
+                value={cardFilter}
+                onChange={(event) => setCardFilter(event.target.value)}
+                className="h-8 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="all">All cards</option>
+                <option value="none">No card</option>
+                {activeCards.map((card) => (
+                  <option key={card.id} value={card.id}>{card.name}</option>
+                ))}
+              </select>
             )}
+            <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
+              {viewMode === "category" ? "By card" : "By category"}
+            </Button>
+            <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {!isPaused && (
+              <Button variant="outline" onClick={() => run(pauseMonth(month))}>Pause month</Button>
+            )}
+            <Button variant="outline" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
           </div>
         </div>
 
-        <div className="p-3">
-          {viewMode === "category" ? (
-            <div className="space-y-3">
-              {groupsWithCategories.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No expense categories yet. Add one on the Categories page.</p>
-              ) : visibleGroups.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No categories match “{search.trim()}”.</p>
-              ) : (
-                visibleGroups.map(({ group, categories: groupCategories }) => {
-                  const groupSpent = groupCategories.reduce((sum, category) => sum + categoryTotal(category.id), 0);
-                  return (
-                    <div key={group.id || "ungrouped"} className="space-y-1">
-                      <div
-                        className="group-tint -mx-3 flex items-center gap-2 rounded-lg px-5 py-1.5"
-                        style={{ "--group-color": group.color } as React.CSSProperties}
-                      >
-                        <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                        <span className="font-heading text-base font-bold">{group.name}</span>
-                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{money(groupSpent)}</span>
+        <div className="rounded-xl border bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
+            <div>
+              <h2 className="text-sm font-semibold">Expenses for {monthLabel(month)}</h2>
+              <p className="text-xs text-muted-foreground">Type an amount, then Shift+Enter to continue to another amount.</p>
+            </div>
+          </div>
+
+          <div className="p-3">
+            {viewMode === "category" ? (
+              <div className="space-y-3">
+                {groupsWithCategories.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">No expense categories yet. Add one on the Categories page.</p>
+                ) : visibleGroups.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">No categories match “{search.trim()}”.</p>
+                ) : (
+                  visibleGroups.map(({ group, categories: groupCategories }) => {
+                    const groupSpent = groupCategories.reduce((sum, category) => sum + categoryTotal(category.id), 0);
+                    return (
+                      <div key={group.id || "ungrouped"} className="space-y-1">
+                        <div
+                          className="group-tint -mx-3 flex items-center gap-2 rounded-lg px-5 py-1.5"
+                          style={{ "--group-color": group.color } as React.CSSProperties}
+                        >
+                          <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                          <span className="font-heading text-base font-bold">{group.name}</span>
+                          <span className="ml-auto text-xs tabular-nums text-muted-foreground">{money(groupSpent)}</span>
+                        </div>
+                        {groupCategories.map((category) => renderCategoryBox(category, group))}
                       </div>
-                      {groupCategories.map((category) => renderCategoryBox(category, group))}
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {visibleCards.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">No matches for “{search.trim()}”.</p>
+                ) : (
+                  visibleCards.map((card) => {
+                  const cardEntries = expenseEntries.filter(
+                    (entry) =>
+                      (entry.card_id ?? "none") === card.id &&
+                      (!query || (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query))
+                  );
+                  const subtotal = query ? cardEntries.reduce((sum, entry) => sum + entry.amount, 0) : cardTotals.get(card.id) ?? 0;
+
+                  return (
+                    <div key={card.id} className="space-y-0.5">
+                      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2">
+                        <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
+                        <span className="font-heading text-sm font-semibold">{card.name}</span>
+                        <span className="ml-auto font-heading text-sm font-semibold tabular-nums">{money(subtotal)}</span>
+                      </div>
+                      <div>
+                        {cardEntries.map((entry) =>
+                          renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards, false)
+                        )}
+                      </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {visibleCards.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No matches for “{search.trim()}”.</p>
-              ) : (
-                visibleCards.map((card) => {
-                const cardEntries = expenseEntries.filter(
-                  (entry) =>
-                    (entry.card_id ?? "none") === card.id &&
-                    (!query || (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query))
-                );
-                const subtotal = query ? cardEntries.reduce((sum, entry) => sum + entry.amount, 0) : cardTotals.get(card.id) ?? 0;
-
-                return (
-                  <div key={card.id} className="space-y-0.5">
-                    <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2">
-                      <span className="size-3.5 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
-                      <span className="font-heading text-sm font-semibold">{card.name}</span>
-                      <span className="ml-auto font-heading text-sm font-semibold tabular-nums">{money(subtotal)}</span>
-                    </div>
-                    <div>
-                      {cardEntries.map((entry) =>
-                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards, false)
-                      )}
-                    </div>
-                  </div>
-                );
-                })
-              )}
-            </div>
-          )}
-
-          <section className="mt-4 border-t border-border/60 pt-3">
-            <div className="flex items-center gap-3 px-1">
-              <h2 className="font-heading text-sm font-semibold">Income</h2>
-              <span className="ml-auto font-heading text-sm font-semibold tabular-nums text-green-600">{money(incomeTotal)}</span>
-            </div>
-            <div className="mt-1.5">
-              {incomeEntries.map((entry) => renderEntryRow(entry, categoryName(entry.category_id), incomeCategories, null))}
-              <div className="flex items-center gap-2 px-1 pt-1.5">
-                <Input
-                  placeholder="Amount"
-                  value={newIncome.amount}
-                  onChange={(event) => setNewIncome((state) => ({ ...state, amount: event.target.value }))}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    submitIncome();
-                  }}
-                  inputMode="decimal"
-                  className="h-8 flex-1 text-sm tabular-nums"
-                />
-                <select
-                  value={newIncome.categoryId || incomeCategories[0]?.id || ""}
-                  onChange={(event) => setNewIncome((state) => ({ ...state, categoryId: event.target.value }))}
-                  className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
-                  disabled={incomeCategories.length === 0}
-                >
-                  {incomeCategories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-                <Button
-                  size="icon"
-                  className="size-8 shrink-0"
-                  aria-label="Add income"
-                  disabled={incomeCategories.length === 0}
-                  onClick={submitIncome}
-                >
-                  <Plus className="size-4" />
-                </Button>
+                  })
+                )}
               </div>
-              {incomeCategories.length === 0 && (
-                <p className="px-1 pt-1 text-xs text-muted-foreground">
-                  No income categories yet. Add one on the Categories page.
-                </p>
-              )}
-            </div>
-          </section>
+            )}
+
+            <section className="mt-4 border-t border-border/60 pt-3">
+              <div className="flex items-center gap-3 px-1">
+                <h2 className="font-heading text-sm font-semibold">Income</h2>
+                <span className="ml-auto font-heading text-sm font-semibold tabular-nums text-green-600">{money(incomeTotal)}</span>
+              </div>
+              <div className="mt-1.5">
+                {incomeEntries.map((entry) => renderEntryRow(entry, categoryName(entry.category_id), incomeCategories, null))}
+                <div className="flex items-center gap-2 px-1 pt-1.5">
+                  <Input
+                    placeholder="Amount"
+                    value={newIncome.amount}
+                    onChange={(event) => setNewIncome((state) => ({ ...state, amount: event.target.value }))}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      submitIncome();
+                    }}
+                    inputMode="decimal"
+                    className="h-8 flex-1 text-sm tabular-nums"
+                  />
+                  <select
+                    value={newIncome.categoryId || incomeCategories[0]?.id || ""}
+                    onChange={(event) => setNewIncome((state) => ({ ...state, categoryId: event.target.value }))}
+                    className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
+                    disabled={incomeCategories.length === 0}
+                  >
+                    {incomeCategories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    size="icon"
+                    className="size-8 shrink-0"
+                    aria-label="Add income"
+                    disabled={incomeCategories.length === 0}
+                    onClick={submitIncome}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+                {incomeCategories.length === 0 && (
+                  <p className="px-1 pt-1 text-xs text-muted-foreground">
+                    No income categories yet. Add one on the Categories page.
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
+
+        <ConfirmDialog
+          open={confirmClear}
+          title={`Clear expense entries for ${monthLabel(month)}?`}
+          description="All expense entries for this month will be removed. Income entries and other months are not affected."
+          confirmLabel="Clear expenses"
+          onOpenChange={setConfirmClear}
+          onConfirm={() => run(clearMonth(month))}
+        />
+
+        {editing && (
+          <EntryDialog
+            key={editing.entry.id}
+            entry={editing.entry}
+            categoryOptions={editing.categoryOptions}
+            cardOptions={editing.cardOptions}
+            onClose={() => setEditing(null)}
+            onSave={(patch) => run(updateEntry({ id: editing.entry.id, ...patch }))}
+          />
+        )}
       </div>
 
-      <ConfirmDialog
-        open={confirmClear}
-        title={`Clear expense entries for ${monthLabel(month)}?`}
-        description="All expense entries for this month will be removed. Income entries and other months are not affected."
-        confirmLabel="Clear expenses"
-        onOpenChange={setConfirmClear}
-        onConfirm={() => run(clearMonth(month))}
-      />
-
-      {editing && (
-        <EntryDialog
-          key={editing.entry.id}
-          entry={editing.entry}
-          categoryOptions={editing.categoryOptions}
-          cardOptions={editing.cardOptions}
-          onClose={() => setEditing(null)}
-          onSave={(patch) => run(updateEntry({ id: editing.entry.id, ...patch }))}
-        />
+      {isPaused && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-background px-8 py-10 text-center shadow-sm">
+            <p className="text-2xl font-bold text-muted-foreground">PAUSED</p>
+            <Button variant="outline" onClick={() => run(resumeMonth(month))}>Resume</Button>
+          </div>
+        </div>
       )}
     </>
   );
