@@ -541,7 +541,7 @@ export function ExpensesClient({
           </select>
         )}
         <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
-        <Button variant="outline" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
+        <Button variant="outline" className="ml-auto" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
         <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
           {viewMode === "category" ? "By card" : "By category"}
         </Button>
