@@ -335,6 +335,16 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **Auto-deploy verified end-to-end:** merging PR #34 to `main` (commit `af727bf`) produced a new Production deployment (`hillybudget-n3c81b57e-riseandshine.vercel.app`, Ready in 22s) with the aliases `hillybudget.vercel.app`, `hillybudget-riseandshine.vercel.app` and `hillybudget-git-main-riseandshine.vercel.app`; the commit SHA on the production target matches the merge commit. `main` is the only branch that deploys.
 - `AGENTS.md` updated: corrected the "preview deployments are disabled in `vercel.json`" claim (it is a project setting), added a Deployment section, and fixed the migration head (`0001`–`0012`, not `0001`–`0010`).
 
+## Orange favicon (2026-10-21)
+
+- The favicon/PWA icon is now the brand orange instead of gray. PR #36 (squash-merged to `main` as `c62dc6d`) → auto-deployed.
+- `src/app/icon.svg` and `public/icons/icon.svg` (kept byte-identical): the disc fill changed `#C6C6C6` → `#D85700` (the logo orange) and the `#D85700` accent dot was **removed** — it would be invisible against an orange disc. The `#101214` tile and the carved dark wave are unchanged.
+- `src/app/favicon.ico` was **regenerated**: it still held the stock `create-next-app` Next.js "N" logo, which is what `/favicon.ico` served to Safari/older browsers. It is now a real 32-bit ICO built from the new SVG at 48/32/16 (BMP DIB + AND mask, transparent rounded corners).
+- Verified on the live deployment: `/icon.svg` and `/icons/icon.svg` serve `#D85700`; `/favicon.ico` decodes to 3 sizes whose dominant colors are `16,18,20,255` (tile) and `216,87,0,255` (disc) with no Next.js green. The `<link rel="icon">` hashes changed, so browsers re-fetch.
+- The in-app brand icon (`public/brand/icon-{light,dark}.svg`, used by `BrandIcon` in the sidebar/top bar) was deliberately **left gray**; the wordmark logos are untouched.
+- Generator script used (one-off, not committed): renders the SVG to 48/32/16 with `sharp` and packs a 32-bit ICO. Re-run it if the icon artwork changes again.
+- `npm run lint` + `npm run build` pass. No app, schema, RLS, or auth changes.
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
