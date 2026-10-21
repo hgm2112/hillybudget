@@ -296,9 +296,9 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 
 ## Restore — Phase B (2026-10-21)
 
-- **State: `0011` IS applied to the live project** (authorized and pushed 2026-10-21; verified: local = remote, function present, `security definer`, `search_path=""`, EXECUTE for `authenticated` only — `anon`/`service_role` denied). `0012` (see below) is **written but NOT applied** — applying it needs fresh authorization.
-- `supabase/migrations/0011_restore_backup.sql` — **frozen as applied** (do not edit; `git show 4112f7f:...` is byte-identical to the deployed body). Original version inserted the backup's row IDs.
-- `supabase/migrations/0012_restore_backup_remap.sql` (new, **pending authorization**): supersedes the function body with (1) **ID remapping** and (2) **household naming**. Same guarantees as `0011`: single transaction, owner-only, new household only, never touches existing households/memberships/profiles/auth users.
+- **State: `0011` and `0012` are both applied to the live project** (pushed 2026-10-21 with explicit authorization; `migration list` shows local = remote for 0001–0012). The deployed function was verified read-only: `security definer`, `search_path=""`, EXECUTE for `authenticated` only (`anon`/`service_role` denied), body contains the ID remap + the `(restored <date>)` name suffix and no longer inserts source row IDs. Existing data confirmed unchanged after the push: 1 household ("WHill"), 1 membership, 44 categories, 593 ledger entries, 179 account balances.
+- `supabase/migrations/0011_restore_backup.sql` — **frozen as applied** (do not edit; byte-identical to the body deployed on 2026-10-21). Original version inserted the backup's row IDs.
+- `supabase/migrations/0012_restore_backup_remap.sql` — **applied**; supersedes the function body with (1) **ID remapping** and (2) **household naming**. Same guarantees as `0011`: single transaction, owner-only, new household only, never touches existing households/memberships/profiles/auth users.
 - **ID remap:** every data table's PK is a *global* `id uuid primary key`, so `0011`'s behavior collided with rows that still exist in the source household (871 such IDs in the user's real backup) and with any earlier restore from the same backup, aborting the whole restore. `0012` keeps five `old → new` maps in `jsonb` variables (`category_groups`, `categories`, `cards`, `accounts`, `recurring_items` — exactly the tables other rows can reference), assigns `gen_random_uuid()` to every inserted row, and dereferences each dependent FK through its map (`categories.group_id`→groups, `recurring_items.category_id/card_id`, `ledger_entries.category_id/card_id/recurring_item_id`, `account_balances.account_id`, `account_archive_periods.account_id`). Restoring the same backup repeatedly now yields distinct, complete households. Original IDs are not preserved (nothing in the app references them; `import_batches` linkage was already dropped).
 - **Household naming (user chose option B):** the restored household is named `<backup name> (restored <export date UTC>)`, e.g. `WHill (restored 2026-10-21)`, so it is distinguishable from the source household. Implemented identically in SQL (`regexp_replace` strips any existing suffix, then appends) and in TS (`restoredHouseholdName` in `src/lib/restore.ts`); the preview route returns `newHouseholdName` so the UI shows the exact name that will be created.
 - **Validator bug found via the user's real backup (fixed):** `household_members` (PK `(household_id, user_id)`) and `household_settings` (PK `household_id`) have **no `id` column**, so a real `select *` export has no `id` on those rows — the Phase A validator demanded one and rejected legitimate backups ("household_members: a row has a missing or invalid id"). `src/lib/restore.ts` now exempts exactly those two tables from the id/duplicate-id rule; the strict id rule stays for all 10 id-bearing tables. The shared fixture had invented ids for those two tables, which is why the bug slipped through — the fixture now matches a real export.
@@ -312,19 +312,18 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
-- Migrations `0001`–`0011` are applied to the live project (`supabase migration list`: local = remote). `0012` is written but NOT applied (awaiting authorization).
+- Migrations `0001`–`0012` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 
 - **No runtime smoke-testing has been done.** All phases were verified only via lint + build (+ vitest unit tests). Realtime, the `ideal_category_amount` RPC, and every page remain untested against the live database.
 - **The restore path has never executed.** The local-DB e2e (`tests/restore-e2e.mjs`) has not been run (no Docker; user declined). `0011` was applied to the remote project, so the *deployed* function body has executed zero times; `0012` (remap + naming) has not been applied either. The first real restore will be the first execution of this SQL against live data.
-- **Until `0012` is applied, the deployed RPC still inserts the backup's original row IDs** — restoring the user's backup as-is would abort on a primary-key collision with the 871 source rows still present. Do not attempt a restore before `0012` is applied.
+- The ID-remap blocker is resolved: `0012` is applied, so a restore of the user's backup no longer collides with the 871 source rows still present in the live household.
 - `/api/keepalive` (`src/app/api/keepalive/route.ts`) uses the service-role key from a public route; it now requires `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Set `CRON_SECRET` in Vercel.
 - Untracked duplicate SVGs in the repo root (`hillybudget-{light,dark}-{icon,logo}.svg`) duplicate `public/brand/` and are intentionally left uncommitted; delete them or ignore them.
 - The user's backup file `hillybudget-backup-2026-10-21(2).json` sits in the repo root; it is git-ignored (`.gitignore:49`) and must stay untracked.
 
 ## Next action
 
-- Authorize and apply `0012`: `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes` (replaces the function only — no schema/data change), then verify with `npx supabase migration list --db-url "$SUPABASE_DB_URL"`.
-- Then test the restore in Settings → Data & Backups with the real backup; expect a new household `WHill (restored 2026-10-21)` with 872 rows, the original household untouched, then switch into it.
+- Test the restore in Settings → Data & Backups with the real backup; expect a new household `WHill (restored 2026-10-21)` with 872 rows, the original household untouched, then switch into it and invite the other member with the new invite code.
 - Merge PRs #30/#31/#32 as desired (Vercel deploys only from `main`).
