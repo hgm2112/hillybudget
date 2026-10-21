@@ -355,6 +355,17 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **RLS policy verified** with three simulated users inside a rolled-back transaction: a co-member's `display_name` is visible, a non-member's is hidden, `anon` still has no access. Rollback confirmed 0 leftover households, 1 profile, 1 auth user.
 - `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm test` (17/17) pass. The **authenticated** UI was not smoke-tested by an agent — the user is signed in and can walk the flows.
 
+## Pause month (2026-10-21)
+
+- PR #40 (squash-merged to `main` as `961d57b`) adds a **Pause month** / **Resume month** button on `/expenses` for the viewed month, a "Paused" badge, a note in the card, and "Paused" markers in the month-nav dropdown. The month's entries stay visible and editable — pausing never hides data.
+- **`supabase/migrations/0014_paused_months.sql` is applied** (local = remote). New `paused_months(id, household_id, month, created_at)` table with `unique(household_id, month)`, RLS via `is_household_member`, grants to `authenticated, service_role`, no Realtime — mirroring `skipped_months`. The same migration replaces `ideal_category_amount` so paused months drop out of the trailing average (stays `security invoker`, so the read is RLS-filtered).
+- A paused month is excluded from: the dashboard's income/expense window (the anchor moves to the latest non-paused month and the window drops paused months, so the spending trend, income-vs-expenses, spending-by-category and the Income / Expenses / Net cash flow cards all end at the last real month), the stats page (all three periods), the trailing-average ideal, and the `/expenses` change-chip baseline.
+- **Net worth is deliberately unaffected** (the user's choice): balances keep their own "skip this month" control on `/accounts`, and excluding October would have rolled net worth back to August (September has no balances).
+- The month-window logic moved to `src/lib/periods.ts` (`windowMonths`, `latestMonth`, `earliestMonth`) and is unit-tested in `tests/periods.test.ts` (10 new tests; `npm test` is now 27/27).
+- **October 2026 is paused in `WHill`** (inserted directly, since it is the month the user wanted excluded). The dashboard 12M window moved from Nov 2025 – Oct 2026 (income $105,365.72 / expenses $90,385.38 / net $14,980.34) to Oct 2025 – Sep 2026 (income $105,365.72 / expenses $96,500.54 / net $8,865.18). The restored household `WHill (restored 2026-10-21)` is **not** paused.
+- The RPC change was proven against the live database with a synthetic $5,000 October expense inside a rolled-back transaction: the November ideal is 771.96 with October unpaused and 387.59 with it paused.
+- Paused months are **not** part of the 12-table JSON backup contract, so they are not carried through a restore; extending the deployed restore RPC would need a separate approved migration.
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
