@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { addEntries, deleteEntry, fillRecurring, updateEntry, type ActionResult } from "./actions";
+import { addEntries, clearMonth, deleteEntry, fillRecurring, updateEntry, type ActionResult } from "./actions";
 
 type Category = {
   id: string;
@@ -79,6 +79,48 @@ function SummaryChip({ info, suffix }: { info: DeltaInfo; suffix?: string }) {
   );
 }
 
+function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              onOpenChange(false);
+              onConfirm();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ExpensesClient({
   householdId,
   month,
@@ -111,6 +153,7 @@ export function ExpensesClient({
   const [newIncome, setNewIncome] = useState({ categoryId: "", amount: "" });
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
 
@@ -498,6 +541,7 @@ export function ExpensesClient({
           </select>
         )}
         <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
+        <Button variant="outline" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
         <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
           {viewMode === "category" ? "By card" : "By category"}
         </Button>
@@ -618,6 +662,15 @@ export function ExpensesClient({
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title={`Clear expense entries for ${monthLabel(month)}?`}
+        description="All expense entries for this month will be removed. Income entries and other months are not affected."
+        confirmLabel="Clear expenses"
+        onOpenChange={setConfirmClear}
+        onConfirm={() => run(clearMonth(month))}
+      />
 
       {editing && (
         <EntryDialog

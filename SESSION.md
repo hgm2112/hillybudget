@@ -268,7 +268,8 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Group headers use `.group-tint` (group color) with a `size-3.5` dot and `text-base font-bold` name; category row dots are `size-2.5` and colored with the **group** color.
 - **Live search bar** (first in the action row): filters by category name (case-insensitive) as you type; hides non-matching categories, auto-expands matches, filters entries in By-card view, and combines with the card filter.
 - `no_ideal` is now honored on `/expenses`: `page.tsx` selects it and forces the ideal to 0 (RPC override null), so categories marked "no ideal" on `/categories` hide the ideal block. Category rows use fixed-width columns (`w-36` ideal, right-aligned, placeholder when absent; `w-24` right-aligned total) so ideal and totals align down the list with consistent padding from the total.
-- **By-card is read-only**: entry rows render without the Edit/Delete dropdown (`renderEntryRow` gained an `editable` flag) and the per-card quick-add row was removed — By-card is now a view-only recap per card; all editing stays in category view and the Income section. `npm run lint` + `npm run build` pass. No runtime smoke test.
+- **By-card is read-only**: entry rows render without the Edit/Delete dropdown (`renderEntryRow` gained an `editable` flag) and the per-card quick-add row was removed — By-card is now a view-only recap per card; all editing stays in category view and the Income section.
+- **Clear expenses** button in the action row: `clearMonth(month)` server action deletes all expense-`ledger_entries` for the viewed month (income untouched), behind a local `ConfirmDialog` (same pattern as `/accounts`). Useful for re-testing `Add recurring items` on a month. `npm run lint` + `npm run build` pass. No runtime smoke test.
 
 ## Checks
 
