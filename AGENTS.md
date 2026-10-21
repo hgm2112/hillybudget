@@ -2,7 +2,7 @@
 
 Household expense tracker. Next.js 16 App Router (TypeScript), Tailwind v4, shadcn/ui, Supabase (Auth/Postgres/Realtime/RLS). Hosting on Vercel.
 
-Commands: `npm install`; `npm run dev`; `npm run build`; `npm run lint`. Place Supabase keys in `.env.local` from `.env.local.example`.
+Commands: `npm install`; `npm run dev`; `npm run build`; `npm run lint`; `npm test`. Place Supabase keys in `.env.local` from `.env.local.example`.
 
 Rules:
 - All tables are household-scoped. Never bypass RLS with the service role in client code.
@@ -28,12 +28,20 @@ Process:
 Git workflow:
 - Use feature branches (`feat/`, `fix/`, `chore/`, etc.).
 - Use Conventional Commits.
-- Open PRs for changes (even solo) for review and clean history. Vercel auto-deploys only from `main` (preview deployments are disabled in `vercel.json`). Run local checks before merging.
+- Open PRs for changes (even solo) for review and clean history. Vercel auto-deploys only from `main` (Preview Deployments are disabled in the Vercel project settings, not in `vercel.json`). Run local checks before merging.
 - Prefer squash merging to `main` for clean main history.
 - Commit early and often. Commit each self-contained change as soon as it works (and type-checks) instead of batching. Don't let many features stack up in one working tree for a single giant commit; if a batch does accumulate, split it into logical commits before pushing.
 - Agents: make a commit as part of finishing a piece of work, and ask before leaving large uncommitted changes.
 
+Deployment:
+- Vercel project: `riseandshine/hillybudget` (team `riseandshine`, hobby plan) → https://hillybudget.vercel.app
+- Production branch is `main`. Once the Vercel GitHub App is installed for this repo, a merge to `main` auto-deploys; Preview Deployments are turned off in the Vercel project settings (not in `vercel.json`).
+- Production env vars live only in Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Config), `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` (Secret). `SUPABASE_DB_URL` is local-only (migrations) and is not set on Vercel.
+- `/api/keepalive` requires `Authorization: Bearer $CRON_SECRET`; Vercel sends that header automatically for the cron in `vercel.json` (`0 9 */3 * *`).
+- Manual deploy from the repo root: `npx vercel --prod`. The project link lives in `.vercel/` (gitignored).
+- Rotate `CRON_SECRET` with `vercel env add CRON_SECRET --environment production --force`.
+
 Database:
-- Migrations `0001`–`0010` are applied to the live project (`supabase migration list` shows local = remote). Head is `0010_income_fixes.sql`.
+- Migrations `0001`–`0012` are applied to the live project (`supabase migration list` shows local = remote). Head is `0012_restore_backup_remap.sql`; `0011`/`0012` are frozen as applied — do not edit them.
 - Apply pending migrations with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`; verify with `npx supabase migration list --db-url "$SUPABASE_DB_URL"`.
 - Schema/column/policy/auth changes still require explicit approval; data migrations (e.g. `0007` card colors, `0006` brand colors, `0010` income fixes) were approved individually.

@@ -323,6 +323,17 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Vercel deploys only from `main`, so the deployed site now has the backup card, the 31-day reminder, the restore flow (owner-gated) and the household switcher. The live database already carried `0011`+`0012`, so the deployed app could restore immediately.
 - PR #21 remains open (base `feat/categories-recurring-controls`); nothing else was touched.
 
+## Deployment to Vercel (2026-10-21)
+
+- The app is now **live on Vercel**: project `riseandshine/hillybudget` (team `riseandshine`, hobby plan, Node 24.x, region `iad1`) at **https://hillybudget.vercel.app** (also `https://hillybudget-riseandshine.vercel.app`).
+- Created via the Vercel CLI (device login as `hgm2112`): `vercel link` → new project, `vercel --prod` → deployment `dpl_AfHs6PtNUzuGbxWERdSt7s3FL7uc` (Ready, 60s, built with Turbopack, 21 routes). The repo is linked through `.vercel/` (gitignored).
+- **Production env vars** (values piped from `.env.local` via stdin, never printed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Config), `SUPABASE_SERVICE_ROLE_KEY` (Secret), `CRON_SECRET` (Secret, 32-byte hex generated 2026-10-21). `SUPABASE_DB_URL` is deliberately **not** set on Vercel (migrations only).
+- The cron from `vercel.json` (`/api/keepalive`, `0 9 */3 * *`) is **registered and enabled** on the project (`crons.definitions`, `disabledAt: null`).
+- **Live smoke test (read-only, unauthenticated):** `/`, `/login`, `/dashboard`, `/expenses` → 200; `/api/keepalive` → 401 without the secret, `{"ok":true,...}` with it. The service-role route works against the live DB. Authenticated page walks are still unverified.
+- `vercel env ls` shows only the 4 expected vars; the uploaded build contains no `.env*`, `.xlsx`, or backup files; the working tree is clean (`.env.local` picked up a `VERCEL_OIDC_TOKEN` from the CLI — still untracked).
+- **GitHub auto-deploy:** the repo is **not yet connected** — `vercel git connect` and `POST /v9/projects/{id}/link` both fail with "you need to install the GitHub integration first" (the Vercel GitHub App is not installed on the `hgm2112` GitHub account). Pending: install the Vercel GitHub App (https://github.com/apps/vercel) for the `hillybudget` repo, then `vercel git connect` and set the production branch to `main` with Preview Deployments off.
+- `AGENTS.md` updated: corrected the "preview deployments are disabled in `vercel.json`" claim (it is a project setting), added a Deployment section, and fixed the migration head (`0001`–`0012`, not `0001`–`0010`).
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
