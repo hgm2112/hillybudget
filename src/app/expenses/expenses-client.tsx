@@ -373,16 +373,18 @@ export function ExpensesClient({
           <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
           <span className="font-heading text-sm font-semibold">{category.name}</span>
           <span className="ml-auto flex items-center gap-3">
-            <span className="flex items-center gap-4">
-              {showIdeal && (
-                <span className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
-                  <span className={difference > 0 ? "text-red-600" : "text-green-600"}>
-                    ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
-                  </span>
+            {showIdeal ? (
+              <span className="flex w-36 shrink-0 items-center justify-end gap-2 text-xs">
+                <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
+                <span className={difference > 0 ? "text-red-600" : "text-green-600"}>
+                  ({difference > 0 ? "+" : ""}{moneyWhole(difference)})
                 </span>
-              )}
-              <span className="font-heading text-sm font-semibold tabular-nums">{money(total)}</span>
+              </span>
+            ) : (
+              <span className="w-36 shrink-0" aria-hidden />
+            )}
+            <span className="w-24 shrink-0 text-right font-heading text-sm font-semibold tabular-nums">
+              {money(total)}
             </span>
             {isOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
