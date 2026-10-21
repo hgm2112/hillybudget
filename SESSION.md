@@ -273,6 +273,16 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **Ideal numbers faded 50%** site-wide (`opacity-50`): the /expenses ideal column (ideal + over/under chip together), the /categories table Ideal cell, and the /categories panel Ideal/Difference stats. Editable controls and the ideal-window setting stay full strength. `npm run lint` + `npm run build` pass. No runtime smoke test.
 - /categories list-card header renamed from "Regular categories" to **"Groups + Categories"**.
 
+## Data & Backups (2026-10-21)
+
+- **JSON backup feature** (no schema change, no new dependency; restore deferred pending design review):
+  - `src/lib/backup.ts`: format version (`hillybudget`/v1), the 12 backup tables in dependency order (households, household_members, household_settings, category_groups, categories, cards, accounts, recurring_items, skipped_months, account_archive_periods, ledger_entries, account_balances), numeric-column normalization (`numeric(12,2)` arrives as strings), filename helper `hillybudget-backup-YYYY-MM-DD.json`, localStorage key helpers.
+  - `GET /api/backup`: server route; runs as the authenticated user so RLS scopes every query; available to **both members**; streams JSON with `Content-Disposition: attachment`.
+  - Excluded (deliberately): `import_batches` (no member insert policy), `profiles` (self-RLS), `invite_code`, `auth.users`/secrets; `created_by`/`import_batch_id` would be stripped at restore time.
+  - Settings: `backup-client.tsx` adds a **Data & Backups** card (both members) with Back Up Now, last-backup timestamp, success (record counts) / failure messages, and notes that the plain-JSON file needs a private location and that a download is not a verified off-site backup. Page h1 changed to "Settings"; import section stays owner-gated under its own heading.
+  - **31-day reminder**: `src/components/backup-reminder.tsx` shows a muted line on `/expenses` when the localStorage-recorded backup is >31 days old; never claims a backup exists. `src/lib/use-last-backup.ts` shares the value via `useSyncExternalStore` (the React hooks lint rule forbids setState-in-effect localStorage reads).
+- Restore design (approved as a *design only*): future single-transaction `security definer` RPC `restore_backup(p_payload)` with in-DB validation; restore only into the caller's household; refuses non-empty households without explicit overwrite confirmation; requires a migration and explicit approval before building.
+
 ## Checks
 
 - `npm run lint` and `npm run build` pass after every phase.

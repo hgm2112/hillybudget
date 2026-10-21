@@ -8,6 +8,7 @@ import { money, moneyWhole, parseAmountExpression } from "@/lib/money";
 import { monthLabel, monthName } from "@/lib/month";
 import { deltaInfo, type DeltaInfo } from "@/lib/accounts";
 import { MonthNav } from "@/components/month-nav";
+import { BackupReminder } from "@/components/backup-reminder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -486,6 +487,8 @@ export function ExpensesClient({
         </div>
         <div />
       </div>
+
+      <BackupReminder householdId={householdId} />
 
       {error && <p className="my-3 text-sm text-red-600">{error}</p>}
 
