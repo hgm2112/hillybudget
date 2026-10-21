@@ -280,7 +280,8 @@ export function ExpensesClient({
     entry: Entry,
     label: string,
     categoryOptions: Category[] | null,
-    cardOptions: CardItem[] | null
+    cardOptions: CardItem[] | null,
+    editable = true
   ) {
     return (
       <div
@@ -289,30 +290,32 @@ export function ExpensesClient({
       >
         <span className="w-20 shrink-0 tabular-nums">{money(entry.amount)}</span>
         <span className="truncate">{label}</span>
-        <div className="ml-auto flex items-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Entry options"
-                  className="text-muted-foreground opacity-50 group-hover/row:opacity-100"
-                />
-              }
-            >
-              <MoreHorizontal className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-28">
-              <DropdownMenuItem onClick={() => setEditing({ entry, categoryOptions, cardOptions })}>
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => run(deleteEntry(entry.id))}>
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {editable && (
+          <div className="ml-auto flex items-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Entry options"
+                    className="text-muted-foreground opacity-50 group-hover/row:opacity-100"
+                  />
+                }
+              >
+                <MoreHorizontal className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-28">
+                <DropdownMenuItem onClick={() => setEditing({ entry, categoryOptions, cardOptions })}>
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={() => run(deleteEntry(entry.id))}>
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
     );
   }
@@ -546,26 +549,6 @@ export function ExpensesClient({
                     (!query || (categoryById.get(entry.category_id)?.name ?? "").toLowerCase().includes(query))
                 );
                 const subtotal = query ? cardEntries.reduce((sum, entry) => sum + entry.amount, 0) : cardTotals.get(card.id) ?? 0;
-                const quickKey = `card:${card.id}`;
-                const quickState = quick[quickKey] ?? { amount: "", cardId: card.id, categoryId: expenseCategories[0]?.id ?? "" };
-
-                function submitQuick(split: boolean) {
-                  const parts = parseAmountExpression(quickState.amount);
-                  const categoryId = quickState.categoryId ?? expenseCategories[0]?.id;
-                  if (!parts || !categoryId) return;
-                  const amounts = split && parts.length > 1 ? parts : [parts.reduce((sum, part) => sum + part, 0)];
-                  run(
-                    addEntries({
-                      month,
-                      categoryId,
-                      cardId: card.id === "none" ? null : card.id,
-                      note: null,
-                      amounts,
-                    })
-                  ).then((ok) => {
-                    if (ok) setQuickDraft(quickKey, { amount: "" });
-                  });
-                }
 
                 return (
                   <div key={card.id} className="space-y-0.5">
@@ -576,35 +559,8 @@ export function ExpensesClient({
                     </div>
                     <div>
                       {cardEntries.map((entry) =>
-                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards)
+                        renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards, false)
                       )}
-                      <div className="flex items-center gap-2 px-3 pt-1.5">
-                        <Input
-                          placeholder="Amount (e.g. 12.50+8)"
-                          title="Enter adds the total; Shift+Enter splits each part into its own entry."
-                          value={quickState.amount}
-                          onChange={(event) => setQuickDraft(quickKey, { amount: event.target.value })}
-                          onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
-                            event.preventDefault();
-                            submitQuick(event.shiftKey);
-                          }}
-                          inputMode="decimal"
-                          className="h-8 flex-1 text-sm tabular-nums"
-                        />
-                        <select
-                          value={quickState.categoryId ?? expenseCategories[0]?.id ?? ""}
-                          onChange={(event) => setQuickDraft(quickKey, { categoryId: event.target.value })}
-                          className="h-8 w-48 shrink-0 rounded-md border bg-background px-2 text-sm"
-                        >
-                          {expenseCategories.map((category) => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                          ))}
-                        </select>
-                        <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
-                          <Plus className="size-4" />
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 );
