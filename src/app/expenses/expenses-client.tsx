@@ -516,35 +516,37 @@ export function ExpensesClient({
       </div>
 
       <div className="my-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search categories"
-            placeholder="Search categories…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-8 w-full pl-8 text-sm sm:w-48"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search categories"
+              placeholder="Search categories…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-8 w-full pl-8 text-sm sm:w-48"
+            />
+          </div>
+          {viewMode === "category" && (
+            <select
+              aria-label="Card filter"
+              value={cardFilter}
+              onChange={(event) => setCardFilter(event.target.value)}
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="all">All cards</option>
+              <option value="none">No card</option>
+              {activeCards.map((card) => (
+                <option key={card.id} value={card.id}>{card.name}</option>
+              ))}
+            </select>
+          )}
+          <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
+            {viewMode === "category" ? "By card" : "By category"}
+          </Button>
+          <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
         </div>
-        {viewMode === "category" && (
-          <select
-            aria-label="Card filter"
-            value={cardFilter}
-            onChange={(event) => setCardFilter(event.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-sm"
-          >
-            <option value="all">All cards</option>
-            <option value="none">No card</option>
-            {activeCards.map((card) => (
-              <option key={card.id} value={card.id}>{card.name}</option>
-            ))}
-          </select>
-        )}
-        <Button onClick={() => run(fillRecurring(month))}>Add recurring items</Button>
         <Button variant="outline" className="ml-auto" onClick={() => setConfirmClear(true)}>Clear expenses</Button>
-        <Button variant="outline" onClick={() => setViewMode(viewMode === "category" ? "card" : "category")}>
-          {viewMode === "category" ? "By card" : "By category"}
-        </Button>
       </div>
 
       <div className="rounded-xl border bg-card">
