@@ -345,6 +345,16 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - Generator script used (one-off, not committed): renders the SVG to 48/32/16 with `sharp` and packs a 32-bit ICO. Re-run it if the icon artwork changes again.
 - `npm run lint` + `npm run build` pass. No app, schema, RLS, or auth changes.
 
+## Settings → Household box (2026-10-21)
+
+- PR #38 (squash-merged to `main` as `c144fc8`) replaces the "Switch household" card with a **Household** box: family code + copy button, **Who's in family**, **Your display name**, **Join family**, **Create family**, and **Your families** (switch + delete).
+- `src/app/settings/household-card.tsx` (new client component) replaces `src/app/settings/switch-household.tsx` (deleted). `src/app/settings/actions.ts` gains `joinFamily`, `createFamily`, `setDisplayName`, `deleteFamily`; `src/app/settings/page.tsx` now always renders the box (it carries the family code and member list, not just the switcher).
+- **`supabase/migrations/0013_profiles_household_select.sql` is applied** (local = remote). A row-level SELECT policy on `public.profiles` so co-members can read each other's `display_name`; the self-only policy stays (policies OR). No table/column/grant/Realtime change. Approved by the user before applying.
+- **Delete family:** owner-only (checked in code *and* enforced by the existing `households_delete` RLS policy); refuses when the user belongs to only one family; the confirm dialog requires typing the family name. Implementation deletes `ledger_entries` + `recurring_items` first (to clear the two `ON DELETE RESTRICT` FKs on `categories`), then the household row, and lets the cascade clear the rest. Runs on the signed-in session — the service role is never used.
+- **Pre-flight against the live DB** (throwaway household, self-cleaning): the ordered delete succeeded with **zero leftover rows** across all 12 child tables, and live row counts (2 households / 2 members / 88 categories / 1186 entries / 358 balances / 24 recurring) were identical before and after. A bare `DELETE FROM households` also succeeded (Postgres handles the cascade ordering despite RESTRICT), but the ordered delete is kept as belt-and-braces.
+- **RLS policy verified** with three simulated users inside a rolled-back transaction: a co-member's `display_name` is visible, a non-member's is hidden, `anon` still has no access. Rollback confirmed 0 leftover households, 1 profile, 1 auth user.
+- `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm test` (17/17) pass. The **authenticated** UI was not smoke-tested by an agent — the user is signed in and can walk the flows.
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
