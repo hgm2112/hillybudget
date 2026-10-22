@@ -709,7 +709,7 @@ export function ExpensesClient({
       </div>
 
       {isPaused && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-background/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-xl border bg-background px-8 py-10 text-center shadow-sm">
             <p className="text-2xl font-bold text-muted-foreground">PAUSED</p>
             <Button variant="outline" onClick={() => run(resumeMonth(month))}>Resume</Button>
