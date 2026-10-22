@@ -535,19 +535,19 @@ export function AccountsClient({
 
   return (
     <>
-      <div inert={isSkipped || undefined}>
-        <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-          <h1 className="text-2xl font-semibold">Accounts</h1>
-          <div className="flex justify-center">
-            <MonthNav value={month} months={months} onSelect={(next) => startTransition(() => router.push(`/accounts?month=${next}`))} />
-          </div>
-          <div className="flex items-center justify-end">
-            {hasBalances && prevMonth && (
-              <span className="text-sm text-muted-foreground">Changes vs {monthName(prevMonth)}</span>
-            )}
-          </div>
+      <div className="relative z-60 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+        <h1 className="text-2xl font-semibold">Accounts</h1>
+        <div className="flex justify-center">
+          <MonthNav value={month} months={months} onSelect={(next) => startTransition(() => router.push(`/accounts?month=${next}`))} />
         </div>
+        <div className="flex items-center justify-end">
+          {hasBalances && prevMonth && (
+            <span className="text-sm text-muted-foreground">Changes vs {monthName(prevMonth)}</span>
+          )}
+        </div>
+      </div>
 
+      <div inert={isSkipped || undefined}>
         {error && status !== "error" && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">

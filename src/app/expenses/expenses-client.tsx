@@ -490,18 +490,18 @@ export function ExpensesClient({
 
   return (
     <>
-      <div inert={isPaused || undefined}>
-        <div className="relative mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="text-2xl font-semibold">Expenses</h1>
-            {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
-          </div>
-          <div className="flex justify-center">
-            <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
-          </div>
-          <div />
+      <div className="relative z-60 mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-semibold">Expenses</h1>
+          {isPending && <span className="text-sm text-muted-foreground">updating…</span>}
         </div>
+        <div className="flex justify-center">
+          <MonthNav value={month} months={months} onSelect={goToMonth} pausedMonths={pausedMonths} />
+        </div>
+        <div />
+      </div>
 
+      <div inert={isPaused || undefined}>
         <BackupReminder householdId={householdId} />
 
         {error && <p className="my-3 text-sm text-red-600">{error}</p>}
