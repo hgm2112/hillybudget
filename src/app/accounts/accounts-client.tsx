@@ -213,6 +213,15 @@ export function AccountsClient({
   );
 
   useEffect(() => {
+    if (!isSkipped) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isSkipped]);
+
+  useEffect(() => {
     const savedString = (accountId: string) => {
       const value = savedByAccount.get(accountId);
       return value === undefined ? "" : formatCurrencyInput(value);
@@ -526,160 +535,162 @@ export function AccountsClient({
 
   return (
     <>
-      <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-        <h1 className="text-2xl font-semibold">Accounts</h1>
-        <div className="flex justify-center">
-          <MonthNav value={month} months={months} onSelect={(next) => startTransition(() => router.push(`/accounts?month=${next}`))} />
+      <div inert={isSkipped || undefined}>
+        <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+          <h1 className="text-2xl font-semibold">Accounts</h1>
+          <div className="flex justify-center">
+            <MonthNav value={month} months={months} onSelect={(next) => startTransition(() => router.push(`/accounts?month=${next}`))} />
+          </div>
+          <div className="flex items-center justify-end">
+            {hasBalances && prevMonth && (
+              <span className="text-sm text-muted-foreground">Changes vs {monthName(prevMonth)}</span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center justify-end">
-          {hasBalances && prevMonth && (
-            <span className="text-sm text-muted-foreground">Changes vs {monthName(prevMonth)}</span>
+
+        {error && status !== "error" && <p className="text-sm text-red-600">{error}</p>}
+
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          {summaries.map((summary) => (
+            <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
+                {summary.label}
+              </div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums">{moneyWhole(summary.value)}</div>
+              <div className="mt-1.5">
+                {prevMonth ? (
+                  <ChangeChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
+                ) : (
+                  <span className="text-xs text-muted-foreground">no prior data</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative rounded-xl border bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
+            <div>
+              <h2 className="text-sm font-semibold">Balances for {monthLabel(month)}</h2>
+              <p className="text-xs text-muted-foreground">Type a balance, then Tab to the next account.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isSkipped &&
+                (status === "saving" ? (
+                  <span className="text-xs text-muted-foreground">Saving…</span>
+                ) : status === "error" ? (
+                  <button type="button" className="text-xs text-red-600 underline-offset-2 hover:underline" onClick={() => retryRef.current?.()}>
+                    Couldn&apos;t save. Retry
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Check className="size-3.5 text-[#10b981]" /> All changes saved
+                  </span>
+                ))}
+              {prevMonth && (
+                <Button variant="outline" size="sm" onClick={carryForward} disabled={isSkipped}>
+                  Carry forward from {monthName(prevMonth)}
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Balances options" className="max-md:size-11" />}>
+                  <MoreHorizontal className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isSkipped ? (
+                    <DropdownMenuItem onClick={() => run(unskipMonth(month))}>Unskip this month</DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => run(skipMonth(month))}>Skip this month</DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem disabled={!hasBalances} onClick={() => setConfirmClear(true)}>
+                    Clear balances for this month
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowArchived((value) => !value)}>
+                    {showArchived ? "Hide archived" : "Show archived"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {!hasBalances && !isSkipped && prevMonth && accounts.length > 0 && (
+            <p className="px-4 pt-2 text-xs text-muted-foreground">
+              No balances yet for {monthLabel(month)}. Enter them below or carry forward from {monthName(prevMonth)}.
+            </p>
+          )}
+
+          {accounts.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+              <p className="text-sm text-muted-foreground">No accounts yet. Add your first one to start tracking balances.</p>
+              <Button onClick={openCreate}>
+                <Plus className="size-4" /> Add account
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-1">
+              {groups.map((group) => (
+                <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_13rem] md:gap-x-5 md:px-4">
+                  <div className="flex items-center gap-3 px-4 py-1.5 md:col-span-full md:px-0">
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
+                      style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
+                    >
+                      {GROUP_LABELS[group.kind]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
+                    {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
+                  </div>
+                  {group.list.map((account) => renderRow(account, group))}
+                </div>
+              ))}
+
+              <div className="border-t border-border/60 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                >
+                  <Plus className="size-4" /> Add account
+                </button>
+              </div>
+            </div>
           )}
         </div>
+
+        <AccountDialog account={dialogAccount} open={dialogOpen} onOpenChange={setDialogOpen} />
+
+        <ConfirmDialog
+          open={confirmDelete !== null}
+          title={`Delete ${confirmDelete?.name ?? "account"}?`}
+          description="All of this account's balance history will be deleted. This cannot be undone."
+          confirmLabel="Delete account"
+          onOpenChange={(open) => !open && setConfirmDelete(null)}
+          onConfirm={() => confirmDelete && run(deleteAccount(confirmDelete.id))}
+        />
+
+        <ConfirmDialog
+          open={confirmClear}
+          title={`Clear balances for ${monthLabel(month)}?`}
+          description="All account balances saved for this month will be removed. Account history for other months is not affected."
+          confirmLabel="Clear balances"
+          onOpenChange={setConfirmClear}
+          onConfirm={() => run(clearBalances(month))}
+        />
       </div>
 
-      {error && status !== "error" && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {summaries.map((summary) => (
-          <div key={summary.key} className="rounded-xl border bg-card px-4 py-3">
-            <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              <span className="size-2 rounded-full" style={{ backgroundColor: summary.dot }} />
-              {summary.label}
-            </div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">{moneyWhole(summary.value)}</div>
-            <div className="mt-1.5">
-              {prevMonth ? (
-                <ChangeChip info={deltaInfo(summary.value, summary.previous, summary.kind)!} suffix={`vs ${monthName(prevMonth)}`} />
-              ) : (
-                <span className="text-xs text-muted-foreground">no prior data</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="relative rounded-xl border bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4">
-          <div>
-            <h2 className="text-sm font-semibold">Balances for {monthLabel(month)}</h2>
-            <p className="text-xs text-muted-foreground">Type a balance, then Tab to the next account.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isSkipped &&
-              (status === "saving" ? (
-                <span className="text-xs text-muted-foreground">Saving…</span>
-              ) : status === "error" ? (
-                <button type="button" className="text-xs text-red-600 underline-offset-2 hover:underline" onClick={() => retryRef.current?.()}>
-                  Couldn&apos;t save. Retry
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Check className="size-3.5 text-[#10b981]" /> All changes saved
-                </span>
-              ))}
-            {prevMonth && (
-              <Button variant="outline" size="sm" onClick={carryForward} disabled={isSkipped}>
-                Carry forward from {monthName(prevMonth)}
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Balances options" className="max-md:size-11" />}>
-                <MoreHorizontal className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {isSkipped ? (
-                  <DropdownMenuItem onClick={() => run(unskipMonth(month))}>Unskip this month</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={() => run(skipMonth(month))}>Skip this month</DropdownMenuItem>
-                )}
-                <DropdownMenuItem disabled={!hasBalances} onClick={() => setConfirmClear(true)}>
-                  Clear balances for this month
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setShowArchived((value) => !value)}>
-                  {showArchived ? "Hide archived" : "Show archived"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+      {isSkipped && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-background px-8 py-10 text-center shadow-sm">
+            <p className="text-2xl font-bold text-muted-foreground">No data this month</p>
+            <Button variant="outline" onClick={() => run(unskipMonth(month))}>Undo skip</Button>
           </div>
         </div>
-
-        {!hasBalances && !isSkipped && prevMonth && accounts.length > 0 && (
-          <p className="px-4 pt-2 text-xs text-muted-foreground">
-            No balances yet for {monthLabel(month)}. Enter them below or carry forward from {monthName(prevMonth)}.
-          </p>
-        )}
-
-        {accounts.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-            <p className="text-sm text-muted-foreground">No accounts yet. Add your first one to start tracking balances.</p>
-            <Button onClick={openCreate}>
-              <Plus className="size-4" /> Add account
-            </Button>
-          </div>
-        ) : (
-          <div className={cn("mt-1", isSkipped && "pointer-events-none opacity-40")}>
-            {groups.map((group) => (
-              <div key={group.kind} className="border-t border-border/60 first:border-t-0 md:grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_10rem_13rem] md:gap-x-5 md:px-4">
-                <div className="flex items-center gap-3 px-4 py-1.5 md:col-span-full md:px-0">
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide uppercase"
-                    style={{ backgroundColor: `${GROUP_COLORS[group.kind]}22`, color: GROUP_COLORS[group.kind] }}
-                  >
-                    {GROUP_LABELS[group.kind]}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {group.list.length} {group.list.length === 1 ? "account" : "accounts"}
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums">{moneyWhole(group.total)}</span>
-                  {prevMonth && <ChangeChip info={deltaInfo(group.total, group.previousTotal, group.kind)!} />}
-                </div>
-                {group.list.map((account) => renderRow(account, group))}
-              </div>
-            ))}
-
-            <div className="border-t border-border/60 px-4 py-3">
-              <button
-                type="button"
-                onClick={openCreate}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-              >
-                <Plus className="size-4" /> Add account
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isSkipped && (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="flex flex-col items-center gap-3 rounded-xl border bg-background/80 px-8 py-10 text-center shadow-sm backdrop-blur-sm">
-              <p className="text-2xl font-semibold text-muted-foreground">No data this month</p>
-              <Button variant="outline" onClick={() => run(unskipMonth(month))}>Undo skip</Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <AccountDialog account={dialogAccount} open={dialogOpen} onOpenChange={setDialogOpen} />
-
-      <ConfirmDialog
-        open={confirmDelete !== null}
-        title={`Delete ${confirmDelete?.name ?? "account"}?`}
-        description="All of this account's balance history will be deleted. This cannot be undone."
-        confirmLabel="Delete account"
-        onOpenChange={(open) => !open && setConfirmDelete(null)}
-        onConfirm={() => confirmDelete && run(deleteAccount(confirmDelete.id))}
-      />
-
-      <ConfirmDialog
-        open={confirmClear}
-        title={`Clear balances for ${monthLabel(month)}?`}
-        description="All account balances saved for this month will be removed. Account history for other months is not affected."
-        confirmLabel="Clear balances"
-        onOpenChange={setConfirmClear}
-        onConfirm={() => run(clearBalances(month))}
-      />
+      )}
     </>
   );
 }

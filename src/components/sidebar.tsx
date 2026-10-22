@@ -216,7 +216,7 @@ export function Sidebar({
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex items-center justify-center border-b border-sidebar-border bg-sidebar px-3 py-3 text-sidebar-foreground md:hidden">
+      <div className="sticky top-0 z-60 flex items-center justify-center border-b border-sidebar-border bg-sidebar px-3 py-3 text-sidebar-foreground md:hidden">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -233,7 +233,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] md:flex",
+          "sticky top-0 z-60 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] md:flex",
           collapsed ? "w-16" : "w-64"
         )}
       >
@@ -241,7 +241,7 @@ export function Sidebar({
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-70 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
           <aside className="absolute top-0 left-0 flex h-full w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
             {body(false, () => setMobileOpen(false))}
