@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus, Search, Split } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus, Repeat, Search, Split } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, moneyWhole, parseAmountExpression } from "@/lib/money";
 import { monthLabel, monthName, shiftMonth } from "@/lib/month";
@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { addEntries, addSpreadEntries, clearMonth, deleteEntry, fillRecurring, pauseMonth, resumeMonth, updateEntry, type ActionResult } from "./actions";
+import { addEntries, addRecurringForCategory, addSpreadEntries, clearMonth, deleteEntry, fillRecurring, pauseMonth, resumeMonth, updateEntry, type ActionResult } from "./actions";
 
 type Category = {
   id: string;
@@ -139,6 +139,7 @@ export function ExpensesClient({
   cards,
   entries,
   idealByCategory,
+  recurringByCategory,
   months,
   groups,
   previousTotals,
@@ -151,6 +152,7 @@ export function ExpensesClient({
   cards: CardItem[];
   entries: Entry[];
   idealByCategory: Record<string, number>;
+  recurringByCategory: Record<string, { id: string; amount: number; card_id: string | null }>;
   months: string[];
   groups: Group[];
   previousTotals: PreviousTotals;
@@ -354,17 +356,20 @@ export function ExpensesClient({
     return (
       <div
         key={entry.id}
-        className="group/row flex items-center gap-3 px-3 py-[3px] text-xs text-muted-foreground"
+        className="group/row col-span-full grid grid-cols-subgrid items-center px-3 py-[3px] text-xs text-muted-foreground"
       >
-        <span className="w-20 shrink-0 tabular-nums">{money(entry.amount)}</span>
-        {entry.spread_group_id && (
-          <span title="Spread across months" aria-label="Spread across months" className="shrink-0 text-muted-foreground/70">
-            <Split className="size-3" />
-          </span>
-        )}
-        <span className="truncate">{label}</span>
-        {editable && (
-          <div className="ml-auto flex items-center">
+        <span className="tabular-nums">{money(entry.amount)}</span>
+        <span
+          title={entry.spread_group_id ? "Spread across months" : undefined}
+          aria-label={entry.spread_group_id ? "Spread across months" : undefined}
+          className="flex justify-center text-muted-foreground/70"
+        >
+          {entry.spread_group_id ? <Split className="size-3" /> : null}
+        </span>
+        <span className="whitespace-nowrap">{label}</span>
+        <span className="min-w-0 truncate text-muted-foreground/60">{entry.note ?? ""}</span>
+        {editable ? (
+          <div className="flex items-center justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -388,6 +393,8 @@ export function ExpensesClient({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        ) : (
+          <span />
         )}
       </div>
     );
@@ -426,6 +433,12 @@ export function ExpensesClient({
     const isOpen = query !== "" || expanded.has(category.id);
     const quickKey = category.id;
     const quickState = quick[quickKey] ?? { amount: "", cardId: cardFilter === "all" ? "none" : cardFilter };
+    const recurring = recurringByCategory[category.id];
+    const recurringAdded = recurring
+      ? (entriesByCategory.get(category.id) ?? []).some(
+          (entry) => entry.recurring_item_id === recurring.id && entry.amount !== 0
+        )
+      : false;
 
     function toggle() {
       setExpanded((existing) => {
@@ -455,14 +468,26 @@ export function ExpensesClient({
 
     return (
       <div key={category.id}>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2 text-left"
-          onClick={toggle}
-        >
-          <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-          <span className="font-heading text-sm font-semibold">{category.name}</span>
-          <span className="ml-auto flex items-center gap-3">
+        <div className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2">
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={toggle}>
+            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+            <span className="font-heading text-sm font-semibold">{category.name}</span>
+          </button>
+          {recurring && (
+            <button
+              type="button"
+              aria-label={recurringAdded ? `Recurring already added for ${category.name}` : `Add recurring for ${category.name}`}
+              title={recurringAdded ? "Recurring added this month" : "Add recurring for this month"}
+              disabled={recurringAdded}
+              className={`shrink-0 rounded p-0.5 transition-colors ${
+                recurringAdded ? "cursor-default text-orange-500/35" : "cursor-pointer text-orange-500 hover:text-orange-600"
+              }`}
+              onClick={() => run(addRecurringForCategory(month, category.id))}
+            >
+              <Repeat className="size-4" />
+            </button>
+          )}
+          <button type="button" className="ml-auto flex items-center gap-3" onClick={toggle}>
             {showIdeal ? (
               <span className="flex w-36 shrink-0 items-center justify-end gap-2 text-xs opacity-50">
                 <span className="text-muted-foreground">ideal {moneyWhole(idealRounded)}</span>
@@ -481,12 +506,14 @@ export function ExpensesClient({
             ) : (
               <ChevronDown className="size-4 text-muted-foreground" />
             )}
-          </span>
-        </button>
+          </button>
+        </div>
 
         {isOpen && (
           <div className="pb-2.5">
-            {list.map((entry) => renderEntryRow(entry, cardName(entry.card_id), null, cards))}
+            <div className="grid grid-cols-[5rem_1rem_max-content_minmax(0,1fr)_auto] gap-x-3">
+              {list.map((entry) => renderEntryRow(entry, cardName(entry.card_id), null, cards))}
+            </div>
 
             <div className="flex items-center gap-2 px-3 pt-1.5">
               <Input
@@ -665,7 +692,7 @@ export function ExpensesClient({
                         <span className="font-heading text-sm font-semibold">{card.name}</span>
                         <span className="ml-auto font-heading text-sm font-semibold tabular-nums">{money(subtotal)}</span>
                       </div>
-                      <div>
+                      <div className="grid grid-cols-[5rem_1rem_max-content_minmax(0,1fr)_auto] gap-x-3">
                         {cardEntries.map((entry) =>
                           renderEntryRow(entry, categoryName(entry.category_id), expenseCategories, cards, false)
                         )}
@@ -682,7 +709,7 @@ export function ExpensesClient({
                 <h2 className="font-heading text-sm font-semibold">Income</h2>
                 <span className="ml-auto font-heading text-sm font-semibold tabular-nums text-green-600">{money(incomeTotal)}</span>
               </div>
-              <div className="mt-1.5">
+              <div className="mt-1.5 grid grid-cols-[5rem_1rem_max-content_minmax(0,1fr)_auto] gap-x-3">
                 {incomeEntries.map((entry) => renderEntryRow(entry, categoryName(entry.category_id), incomeCategories, null))}
                 <div className="flex items-center gap-2 px-1 pt-1.5">
                   <Input

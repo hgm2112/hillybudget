@@ -222,3 +222,61 @@ export async function fillRecurring(month: string): Promise<ActionResult> {
   revalidatePath("/expenses");
   return { inserted: toInsert.length };
 }
+
+export async function addRecurringForCategory(month: string, categoryId: string): Promise<ActionResult> {
+  if (!MONTH_RE.test(month)) return { error: "Invalid month." };
+  if (!categoryId) return { error: "Category is required." };
+  const { supabase, householdId } = await context();
+
+  const { data: template, error: templateError } = await supabase
+    .from("recurring_items")
+    .select("id, category_id, card_id, amount, note, start_month, end_month")
+    .eq("household_id", householdId)
+    .eq("category_id", categoryId)
+    .eq("active", true)
+    .lte("start_month", month)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (templateError) return { error: templateError.message };
+  if (!template) return { error: "No recurring item found for this category." };
+  if (template.end_month && template.end_month < month) return { error: "This recurring item is not due for this month." };
+
+  const { data: existing, error: existingError } = await supabase
+    .from("ledger_entries")
+    .select("id, amount")
+    .eq("household_id", householdId)
+    .eq("month", month)
+    .eq("recurring_item_id", template.id)
+    .limit(1)
+    .maybeSingle();
+  if (existingError) return { error: existingError.message };
+  if (existing) {
+    if (Number(existing.amount) !== 0) return { inserted: 0 };
+    const { error } = await supabase
+      .from("ledger_entries")
+      .update({
+        amount: Number(template.amount),
+        card_id: template.card_id,
+        note: template.note,
+      })
+      .eq("id", existing.id);
+    if (error) return { error: error.message };
+    revalidatePath("/expenses");
+    return { inserted: 1 };
+  }
+
+  const { error } = await supabase.from("ledger_entries").insert({
+    household_id: householdId,
+    month,
+    category_id: template.category_id,
+    card_id: template.card_id,
+    amount: Number(template.amount),
+    note: template.note,
+    recurring_item_id: template.id,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/expenses");
+  return { inserted: 1 };
+}

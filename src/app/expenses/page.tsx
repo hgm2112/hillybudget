@@ -22,6 +22,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     { data: firstEntry },
     { data: lastEntry },
     { data: paused },
+    { data: recurring },
   ] = await Promise.all([
     supabase
       .from("categories")
@@ -55,6 +56,12 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       .limit(1)
       .maybeSingle(),
     supabase.from("paused_months").select("month").eq("household_id", household_id),
+    supabase
+      .from("recurring_items")
+      .select("id, category_id, amount, card_id")
+      .eq("household_id", household_id)
+      .eq("active", true)
+      .order("created_at"),
   ]);
 
   const earliestMonth = firstEntry?.month ?? currentMonth;
@@ -84,6 +91,13 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     idealByCategory[category.id] = category.no_ideal ? 0 : Number(idealResults[index]?.data ?? 0);
   });
 
+  const recurringByCategory: Record<string, { id: string; amount: number; card_id: string | null }> = {};
+  for (const row of recurring ?? []) {
+    if (!recurringByCategory[row.category_id]) {
+      recurringByCategory[row.category_id] = { id: row.id, amount: Number(row.amount), card_id: row.card_id };
+    }
+  }
+
   const kindById = new Map((categories ?? []).map((category) => [category.id, category.kind]));
   const pausedMonths = (paused ?? []).map((row) => row.month);
   const pausedSet = new Set(pausedMonths);
@@ -111,6 +125,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
         categories={categories ?? []}
         cards={cards ?? []}
         idealByCategory={idealByCategory}
+        recurringByCategory={recurringByCategory}
         months={months}
         groups={groups ?? []}
         previousTotals={previousTotals}
