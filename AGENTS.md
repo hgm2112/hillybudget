@@ -45,3 +45,25 @@ Database:
 - Migrations `0001`–`0012` are applied to the live project (`supabase migration list` shows local = remote). Head is `0012_restore_backup_remap.sql`; `0011`/`0012` are frozen as applied — do not edit them.
 - Apply pending migrations with `npx supabase db push --db-url "$SUPABASE_DB_URL" --yes`; verify with `npx supabase migration list --db-url "$SUPABASE_DB_URL"`.
 - Schema/column/policy/auth changes still require explicit approval; data migrations (e.g. `0007` card colors, `0006` brand colors, `0010` income fixes) were approved individually.
+
+## Safety: destructive and irreversible actions
+
+Before taking any destructive or irreversible action, you MUST get the user's explicit confirmation that clearly states the action and its scope. Do not proceed on assumptions.
+
+Destructive/irreversible actions include (but are not limited to):
+- Deleting user accounts or auth users (e.g. Supabase `auth.users`), profiles, or identity records
+- Deleting or wiping application data (rows/records), especially in bulk or for an entire user/account
+- Dropping/truncating tables or schemas, running destructive migrations, or removing production/stored data
+- Any operation that cannot be reliably undone
+
+When requesting confirmation:
+- State exactly what will be deleted/changed, for whom/which target (e.g. which user/account/environment), and that it is permanent/irreversible (and whether backups/PITR are known to exist, if relevant).
+- Distinguish “delete this user’s app data” from “delete the account/auth user/profile” — treat them as different scopes and confirm each if both apply.
+- Wait for an explicit “yes/proceed” to that specific scope before acting. If the user’s intent is ambiguous, ask a clarifying question instead of inferring.
+
+## How to explain changes (novice-friendly)
+
+When you finish work or answer questions, include a short **plain-English summary** first (2–5 sentences) for someone who isn’t technical:
+- Say **what changed** in everyday words (what the app/site can do now).
+- Say **exactly what I need to do next**, if anything — be specific and spell it out. List the exact steps, clicks, or words/commands I must use (for example: “Nothing you need to do.”, “Click **Save** on the settings page.”, or “Run this exact command: `...`” / “Say: `...`”). If I don’t need to do anything, say that clearly.
+- Avoid jargon and long technical rundowns. If technical details are needed, put them **after** the simple summary under a separate “Details (optional)” heading.
