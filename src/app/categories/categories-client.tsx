@@ -98,6 +98,7 @@ export function CategoriesClient({
   cards,
   totals,
   recurring,
+  pausedMonths = [],
 }: {
   month: string;
   months: string[];
@@ -107,6 +108,7 @@ export function CategoriesClient({
   cards: CardItem[];
   totals: Total[];
   recurring: Record<string, Recurring>;
+  pausedMonths?: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -178,6 +180,7 @@ export function CategoriesClient({
   }, [groups, regular]);
 
   const regularIds = useMemo(() => new Set(regular.map((category) => category.id)), [regular]);
+  const pausedSet = useMemo(() => new Set(pausedMonths), [pausedMonths]);
 
   const chartData = useMemo(() => {
     const periodMonths =
@@ -194,11 +197,13 @@ export function CategoriesClient({
         : Array.from({ length: PERIODS.find((entry) => entry.key === period)?.months ?? 12 }, (_, index) =>
             shiftMonth(month, index - ((PERIODS.find((entry) => entry.key === period)?.months ?? 12) - 1))
           );
-    return periodMonths.map((m) => ({
-      month: shortMonth(m),
-      total: totals.filter((row) => row.month === m && regularIds.has(row.category_id)).reduce((sum, row) => sum + row.total, 0),
-    }));
-  }, [totals, month, period, regularIds]);
+    return periodMonths
+      .filter((m) => !pausedSet.has(m))
+      .map((m) => ({
+        month: shortMonth(m),
+        total: totals.filter((row) => row.month === m && regularIds.has(row.category_id)).reduce((sum, row) => sum + row.total, 0),
+      }));
+  }, [totals, month, period, regularIds, pausedSet]);
 
   const keyMetrics = useMemo(() => {
     const years = [...new Set(totals.map((row) => row.month.slice(0, 4)))].sort().reverse().slice(0, 3);

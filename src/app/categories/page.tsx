@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import { requireHousehold } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { monthRange, toMonthKey } from "@/lib/month";
+import { monthRange, shiftMonth, toMonthKey } from "@/lib/month";
 import { CategoriesClient } from "./categories-client";
 
 const MONTH_RE = /^\d{4}-\d{2}-01$/;
@@ -22,6 +23,7 @@ export default async function CategoriesPage({
     { data: settings },
     { data: totals },
     { data: recurring },
+    { data: paused },
   ] = await Promise.all([
     supabase
       .from("categories")
@@ -46,11 +48,36 @@ export default async function CategoriesPage({
       .eq("household_id", household_id)
       .eq("active", true)
       .order("created_at"),
+    supabase.from("paused_months").select("month").eq("household_id", household_id),
   ]);
 
+  const pausedMonths = (paused ?? []).map((row) => row.month);
+  const pausedSet = new Set(pausedMonths);
   const recordedMonths = [...new Set((totals ?? []).map((total) => total.month))].sort();
   const latestRecorded = recordedMonths.at(-1) ?? currentMonth;
-  const month = MONTH_RE.test(params.month ?? "") ? (params.month as string) : latestRecorded;
+  const requestedMonth = MONTH_RE.test(params.month ?? "") ? (params.month as string) : null;
+  let month = requestedMonth ?? latestRecorded;
+  if (!requestedMonth && pausedSet.has(month)) {
+    let cursor = month;
+    for (let i = 0; i < 240; i++) {
+      cursor = shiftMonth(cursor, -1);
+      if (!pausedSet.has(cursor)) {
+        month = cursor;
+        break;
+      }
+    }
+    if (pausedSet.has(month)) {
+      cursor = requestedMonth ?? latestRecorded;
+      for (let i = 0; i < 240; i++) {
+        cursor = shiftMonth(cursor, 1);
+        if (!pausedSet.has(cursor)) {
+          month = cursor;
+          break;
+        }
+      }
+    }
+    if (month !== latestRecorded) redirect(`/categories?month=${month}`);
+  }
   const latestMonth = [latestRecorded, currentMonth, month].sort().at(-1) as string;
   const months = monthRange(recordedMonths[0] ?? currentMonth, latestMonth);
 
@@ -100,6 +127,7 @@ export default async function CategoriesPage({
           total: Number(total.total),
         }))}
         recurring={recurringByCategory}
+        pausedMonths={pausedMonths}
       />
     </main>
   );

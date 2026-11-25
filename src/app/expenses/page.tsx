@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import { requireHousehold } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { monthRange, toMonthKey } from "@/lib/month";
+import { monthRange, shiftMonth, toMonthKey } from "@/lib/month";
 import { ExpensesClient } from "./expenses-client";
 
 const MONTH_RE = /^\d{4}-\d{2}-01$/;
@@ -9,9 +10,36 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   const { household_id } = await requireHousehold();
   const params = await searchParams;
   const currentMonth = toMonthKey(new Date());
-  const month = MONTH_RE.test(params.month ?? "") ? (params.month as string) : currentMonth;
+  const requestedMonth = MONTH_RE.test(params.month ?? "") ? (params.month as string) : null;
 
   const supabase = await createClient();
+  const { data: paused } = await supabase.from("paused_months").select("month").eq("household_id", household_id);
+  const pausedMonths = (paused ?? []).map((row) => row.month);
+  const pausedSet = new Set(pausedMonths);
+
+  let month = requestedMonth ?? currentMonth;
+  if (!requestedMonth && pausedSet.has(month)) {
+    let cursor = month;
+    for (let i = 0; i < 240; i++) {
+      cursor = shiftMonth(cursor, -1);
+      if (!pausedSet.has(cursor)) {
+        month = cursor;
+        break;
+      }
+    }
+    if (pausedSet.has(month)) {
+      cursor = requestedMonth ?? currentMonth;
+      for (let i = 0; i < 240; i++) {
+        cursor = shiftMonth(cursor, 1);
+        if (!pausedSet.has(cursor)) {
+          month = cursor;
+          break;
+        }
+      }
+    }
+    if (month !== currentMonth) redirect(`/expenses?month=${month}`);
+  }
+
   const [
     { data: categories },
     { data: groups },
@@ -21,7 +49,6 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     { data: monthlyTotals },
     { data: firstEntry },
     { data: lastEntry },
-    { data: paused },
     { data: recurring },
   ] = await Promise.all([
     supabase
@@ -55,7 +82,6 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       .order("month", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("paused_months").select("month").eq("household_id", household_id),
     supabase
       .from("recurring_items")
       .select("id, category_id, amount, card_id")
@@ -99,8 +125,6 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   }
 
   const kindById = new Map((categories ?? []).map((category) => [category.id, category.kind]));
-  const pausedMonths = (paused ?? []).map((row) => row.month);
-  const pausedSet = new Set(pausedMonths);
   const recordedMonths = [...new Set((monthlyTotals ?? []).map((row) => row.month))].sort();
   const prevMonth = recordedMonths.filter((value) => value < month && !pausedSet.has(value)).at(-1) ?? null;
   const previousTotals = { income: 0, expense: 0, net: 0, entries: 0 };
