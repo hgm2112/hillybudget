@@ -371,10 +371,19 @@ Note: `/expenses` body text was later enlarged again (`--text-xs` 18, `--text-sm
 - **Header row stays above the veil (PR #49):** the title + **MonthNav** top line (and the "Changes vs …" slot on /accounts) sits **outside** the `inert` wrapper and paints above the `z-50` overlay (`relative z-60`): the top line stays bright and fully interactive while a month is paused/skipped, and you can move between months directly — the overlay disappears on a normal month and returns on another paused/skipped one. Everything below remains inert (entries, balances, clear/carry-forward buttons) until resumed/undone.
 - **Shared overlay veil (PR #47):** both overlays now dim with one identical veil, per theme — `bg-black/40` in light mode (a neutral scrim; the previous near-white `bg-background/70` wash was almost invisible over /accounts' sparse white content since white-on-white can't dim), `dark:bg-background/70` in dark mode (unchanged). Rendered both pages with the app's compiled CSS in a headless browser to verify the dim matches before shipping.
 
+## Expenses spread, recurring fill, and paused navigation (2026-11-25)
+
+- **Spread an expense across months:** `/expenses` quick-add now has a small down-arrow menu next to `+` with **Spread across months…**. The dialog pre-fills the amount, defaults to 3 months starting in the viewed month, shows a preview, and creates cent-safe monthly `ledger_entries` (exact total preserved). New server action `addSpreadEntries` in `src/app/expenses/actions.ts`; revalidates `/expenses`, `/dashboard`, `/stats`. No schema change for the split itself.
+- **Spread marker (approved migration):** `supabase/migrations/0015_ledger_spread_group.sql` adds nullable `ledger_entries.spread_group_id uuid`; applied to the live project (local = remote). New spreads save a shared `spread_group_id`; `/expenses` shows a small "Spread across months" icon on marked rows. Existing pre-marker spread entries are unmarked. Frozen restore scripts `0011`/`0012` were not edited, so restored backups won’t preserve `spread_group_id`.
+- **Expenses row UX:** month entries load newest-first (`created_at desc, id desc`); entry rows show the note after the card/label; card/label shows full name and rows use a shared grid/subgrid so note/actions columns align.
+- **Per-category recurring fill on `/expenses`:** page loads active `recurring_items`; categories with recurring show an orange `Repeat` icon. Click adds that category’s recurring entry for the viewed month via `addRecurringForCategory` (due/active/duplicate checks). A $0.00 recurring-linked placeholder counts as unfilled and is updated to the template amount instead of duplicated.
+- **Paused-month defaults:** when `/expenses` or `/categories` is opened with no explicit `?month=...`, a paused default month redirects to the nearest unpaused month (backward first, then forward). `/categories` spending trend excludes paused months.
+- **Checks/commits:** `npm run lint` and `npm run build` passed for each change. `npm test` and manual browser testing were not run by the agent. Commits pushed to `main`: `646812e`, `59dc21b`, `230c25c`, `32e5d49`.
+
 ## Checks
 
 - `npm run lint`, `npm test`, and `npm run build` pass after every phase.
-- Migrations `0001`–`0012` are applied to the live project (`supabase migration list`: local = remote).
+- Migrations `0001`–`0015` are applied to the live project (`supabase migration list`: local = remote).
 
 ## Known issues and unfinished work
 
