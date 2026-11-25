@@ -499,7 +499,7 @@ export function AccountsClient({
             onBlur={() => onBlur(account.id)}
             onKeyDown={(event) => onInputKeyDown(event, account.id)}
             placeholder={previous !== null ? formatCurrencyInput(previous) : "0.00"}
-            className="text-center tabular-nums"
+            className="text-center tabular-nums placeholder:italic placeholder:text-muted-foreground/45"
           />
         </div>
 
