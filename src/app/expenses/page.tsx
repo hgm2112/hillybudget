@@ -37,7 +37,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     supabase.from("household_settings").select("ideal_window").eq("household_id", household_id).maybeSingle(),
     supabase
       .from("ledger_entries")
-      .select("id, category_id, card_id, amount, note, recurring_item_id")
+      .select("id, category_id, card_id, amount, note, recurring_item_id, spread_group_id")
       .eq("household_id", household_id)
       .eq("month", month),
     supabase

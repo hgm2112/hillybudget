@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { shiftMonth } from "@/lib/month";
 import { requireHousehold } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult = { error?: string; inserted?: number };
 
@@ -41,6 +42,53 @@ export async function addEntries(input: {
 
   revalidatePath("/expenses");
   return { inserted: amounts.length };
+}
+
+export async function addSpreadEntries(input: {
+  startMonth: string;
+  count: number;
+  categoryId: string;
+  cardId: string | null;
+  note: string | null;
+  totalAmount: number;
+}): Promise<ActionResult> {
+  if (!MONTH_RE.test(input.startMonth)) return { error: "Invalid month." };
+  if (!input.categoryId) return { error: "Category is required." };
+  if (!Number.isInteger(input.count) || input.count < 2 || input.count > 60) {
+    return { error: "Choose between 2 and 60 months." };
+  }
+  if (!Number.isFinite(input.totalAmount) || input.totalAmount === 0) {
+    return { error: "Amount is required." };
+  }
+
+  const totalCents = Math.round(input.totalAmount * 100);
+  const sign = totalCents < 0 ? -1 : 1;
+  const absCents = Math.abs(totalCents);
+  const base = Math.floor(absCents / input.count);
+  const remainder = absCents % input.count;
+
+  const { supabase, householdId } = await context();
+  const spreadGroupId = crypto.randomUUID();
+  const rows = Array.from({ length: input.count }, (_, index) => {
+    const cents = (base + (index < remainder ? 1 : 0)) * sign;
+    return {
+      household_id: householdId,
+      month: shiftMonth(input.startMonth, index),
+      category_id: input.categoryId,
+      card_id: input.cardId,
+      amount: cents / 100,
+      note: input.note || null,
+      spread_group_id: spreadGroupId,
+    };
+  });
+
+  const { error } = await supabase.from("ledger_entries").insert(rows);
+  if (error) return { error: error.message };
+
+  revalidatePath("/expenses");
+  revalidatePath("/dashboard");
+  revalidatePath("/stats");
+  return { inserted: rows.length };
 }
 
 export async function updateEntry(input: {

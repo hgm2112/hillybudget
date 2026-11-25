@@ -135,6 +135,7 @@ create table public.ledger_entries (
   amount            numeric(12,2) not null,
   note              text,
   recurring_item_id uuid references public.recurring_items(id) on delete set null,
+  spread_group_id   uuid,
   import_batch_id   uuid references public.import_batches(id) on delete set null,
   created_by        uuid references auth.users(id) on delete set null,
   created_at        timestamptz not null default now(),

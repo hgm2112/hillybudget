@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreHorizontal, Plus, Search, Split } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { money, moneyWhole, parseAmountExpression } from "@/lib/money";
-import { monthLabel, monthName } from "@/lib/month";
+import { monthLabel, monthName, shiftMonth } from "@/lib/month";
 import { deltaInfo, type DeltaInfo } from "@/lib/accounts";
 import { MonthNav } from "@/components/month-nav";
 import { BackupReminder } from "@/components/backup-reminder";
@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { addEntries, clearMonth, deleteEntry, fillRecurring, pauseMonth, resumeMonth, updateEntry, type ActionResult } from "./actions";
+import { addEntries, addSpreadEntries, clearMonth, deleteEntry, fillRecurring, pauseMonth, resumeMonth, updateEntry, type ActionResult } from "./actions";
 
 type Category = {
   id: string;
@@ -51,6 +51,7 @@ type Entry = {
   amount: number;
   note: string | null;
   recurring_item_id: string | null;
+  spread_group_id: string | null;
 };
 
 type QuickDraft = { amount: string; cardId: string; categoryId?: string };
@@ -59,6 +60,15 @@ type EditTarget = {
   entry: Entry;
   categoryOptions: Category[] | null;
   cardOptions: CardItem[] | null;
+};
+
+type SpreadTarget = {
+  categoryId: string;
+  categoryName: string;
+  cardId: string;
+  amount: string;
+  count: string;
+  startMonth: string;
 };
 
 const TONE_CLASSES: Record<"positive" | "negative" | "neutral", string> = {
@@ -157,6 +167,7 @@ export function ExpensesClient({
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [spread, setSpread] = useState<SpreadTarget | null>(null);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
   const pausedSet = useMemo(() => new Set(pausedMonths), [pausedMonths]);
@@ -346,6 +357,11 @@ export function ExpensesClient({
         className="group/row flex items-center gap-3 px-3 py-[3px] text-xs text-muted-foreground"
       >
         <span className="w-20 shrink-0 tabular-nums">{money(entry.amount)}</span>
+        {entry.spread_group_id && (
+          <span title="Spread across months" aria-label="Spread across months" className="shrink-0 text-muted-foreground/70">
+            <Split className="size-3" />
+          </span>
+        )}
         <span className="truncate">{label}</span>
         {editable && (
           <div className="ml-auto flex items-center">
@@ -383,6 +399,20 @@ export function ExpensesClient({
     if (!categoryId || !Number.isFinite(amount)) return;
     run(addEntries({ month, categoryId, cardId: null, note: null, amounts: [amount] })).then((ok) => {
       if (ok) setNewIncome({ categoryId: newIncome.categoryId, amount: "" });
+    });
+  }
+
+  function openSpread(category: Category, quickState: QuickDraft) {
+    const parsed = parseAmountExpression(quickState.amount);
+    const amount = parsed ? String(parsed.reduce((sum, part) => sum + part, 0)) : quickState.amount.trim();
+    setError(null);
+    setSpread({
+      categoryId: category.id,
+      categoryName: category.name,
+      cardId: quickState.cardId === "none" ? "none" : quickState.cardId,
+      amount,
+      count: "3",
+      startMonth: month,
     });
   }
 
@@ -481,6 +511,16 @@ export function ExpensesClient({
               <Button size="icon" className="size-8 shrink-0" aria-label="Add entry" onClick={() => submitQuick(false)}>
                 <Plus className="size-4" />
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="More add options" />}
+                >
+                  <ChevronDown className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openSpread(category, quickState)}>Spread across months...</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         )}
@@ -706,6 +746,27 @@ export function ExpensesClient({
             onSave={(patch) => run(updateEntry({ id: editing.entry.id, ...patch }))}
           />
         )}
+
+        {spread && (
+          <SpreadDialog
+            target={spread}
+            onClose={() => setSpread(null)}
+            onSave={async (next) => {
+              const ok = await run(
+                addSpreadEntries({
+                  startMonth: next.startMonth,
+                  count: next.count,
+                  categoryId: spread.categoryId,
+                  cardId: spread.cardId === "none" ? null : spread.cardId,
+                  note: null,
+                  totalAmount: next.amount,
+                })
+              );
+              if (ok) setQuickDraft(spread.categoryId, { amount: "" });
+              return ok;
+            }}
+          />
+        )}
       </div>
 
       {isPaused && (
@@ -817,6 +878,120 @@ function EntryDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={busy}>Save</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SpreadDialog({
+  target,
+  onClose,
+  onSave,
+}: {
+  target: SpreadTarget;
+  onClose: () => void;
+  onSave: (next: { amount: number; count: number; startMonth: string }) => Promise<boolean>;
+}) {
+  const [amount, setAmount] = useState(target.amount);
+  const [count, setCount] = useState(target.count);
+  const [startMonth, setStartMonth] = useState(target.startMonth.slice(0, 7));
+  const [busy, setBusy] = useState(false);
+
+  const parsedAmount = Number(amount);
+  const parsedCount = Number(count);
+  const startMonthKey = /^\d{4}-\d{2}$/.test(startMonth) ? `${startMonth}-01` : "";
+  const preview = useMemo(() => {
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) return [];
+    if (!Number.isInteger(parsedCount) || parsedCount < 2 || parsedCount > 60) return [];
+    if (!startMonthKey) return [];
+    const totalCents = Math.round(parsedAmount * 100);
+    const sign = totalCents < 0 ? -1 : 1;
+    const absCents = Math.abs(totalCents);
+    const base = Math.floor(absCents / parsedCount);
+    const remainder = absCents % parsedCount;
+    return Array.from({ length: parsedCount }, (_, index) => ({
+      month: shiftMonth(startMonthKey, index),
+      amount: ((base + (index < remainder ? 1 : 0)) * sign) / 100,
+    }));
+  }, [parsedAmount, parsedCount, startMonthKey]);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) return;
+    if (!Number.isInteger(parsedCount) || parsedCount < 2 || parsedCount > 60) return;
+    if (!startMonthKey) return;
+    setBusy(true);
+    const ok = await onSave({ amount: parsedAmount, count: parsedCount, startMonth: startMonthKey });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Spread across months</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Split <span className="font-medium text-foreground">{target.categoryName}</span> into equal monthly entries.
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="spread-amount">Total amount</Label>
+            <Input
+              id="spread-amount"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              inputMode="decimal"
+              className="tabular-nums"
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="spread-count">Months</Label>
+              <Input
+                id="spread-count"
+                type="number"
+                min={2}
+                max={60}
+                step={1}
+                value={count}
+                onChange={(event) => setCount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="spread-start">Starting month</Label>
+              <Input
+                id="spread-start"
+                type="month"
+                value={startMonth}
+                onChange={(event) => setStartMonth(event.target.value)}
+              />
+            </div>
+          </div>
+          {preview.length > 0 && (
+            <div className="rounded-md border bg-muted/20 p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Preview</p>
+              <div className="grid max-h-44 gap-1 overflow-auto text-sm">
+                {preview.map((item) => (
+                  <div key={item.month} className="flex items-center justify-between gap-3">
+                    <span>{monthLabel(item.month)}</span>
+                    <span className="tabular-nums">{money(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || preview.length === 0}>
+              {busy ? "Adding..." : `Add ${preview.length || ""} entries`}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
